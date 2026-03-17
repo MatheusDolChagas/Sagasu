@@ -1,0 +1,210 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Usuário do sistema
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  name          String
+  phone         String?
+  role          UserRole @default(USER)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relacionamentos
+  cases         Case[]
+  tips          Tip[]
+  volunteers    Volunteer[]
+  notifications Notification[]
+  groups        Group[]
+  groupMembers  GroupMember[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  POLICE
+  NGO
+  ADMIN
+}
+
+// Caso de desaparecimento
+model Case {
+  id              String      @id @default(uuid())
+  title           String
+  description     String      @db.Text
+  missingPersonName String
+  age             Int?
+  gender          String?
+  lastSeenLocation String?
+  lastSeenDate    DateTime?
+  status          CaseStatus  @default(ACTIVE)
+  isVerified      Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relacionamentos
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tips            Tip[]
+  volunteers      Volunteer[]
+  groups          Group[]
+  media           Media[]
+  notifications   Notification[]
+
+  @@map("cases")
+}
+
+enum CaseStatus {
+  ACTIVE
+  FOUND
+  CLOSED
+  ARCHIVED
+}
+
+// Dica/Informação anônima ou identificada
+model Tip {
+  id          String      @id @default(uuid())
+  content     String      @db.Text
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  isAnonymous Boolean     @default(true)
+  isVerified  Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relacionamentos
+  caseId      String
+  case        Case        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  media       Media[]
+
+  @@map("tips")
+}
+
+// Voluntário individual
+model Volunteer {
+  id          String   @id @default(uuid())
+  status      VolunteerStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, caseId])
+  @@map("volunteers")
+}
+
+enum VolunteerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Grupo de busca (ONG)
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  leaderId    String
+  leader      User     @relation(fields: [leaderId], references: [id], onDelete: Cascade)
+  members     GroupMember[]
+
+  @@map("groups")
+}
+
+// Membros do grupo
+model GroupMember {
+  id          String   @id @default(uuid())
+  role        GroupRole @default(MEMBER)
+  joinedAt    DateTime @default(now())
+
+  // Relacionamentos
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+enum GroupRole {
+  LEADER
+  MEMBER
+}
+
+// Mídia (fotos, vídeos)
+model Media {
+  id          String   @id @default(uuid())
+  url         String
+  type        MediaType
+  isVerified  Boolean  @default(false)
+  aiAnalysis  String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  // Relacionamentos
+  caseId      String?
+  case        Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  tipId       String?
+  tip         Tip?     @relation(fields: [tipId], references: [id], onDelete: Cascade)
+
+  @@map("media")
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+// Notificações
+model Notification {
+  id          String   @id @default(uuid())
+  title       String
+  message     String   @db.Text
+  type        NotificationType
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  // Relacionamentos
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  caseId      String?
+  case        Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  TIP_RECEIVED
+  CASE_UPDATE
+  VOLUNTEER_JOINED
+  CASE_RESOLVED
+  SYSTEM
+}
