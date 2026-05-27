@@ -43,8 +43,12 @@ export default function FAQ() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <section className="bg-dark text-white py-12 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
+      <section className="relative overflow-hidden bg-gradient-to-r from-dark via-dark/92 to-primary/25 text-white py-12 px-4">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-primary/20 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-accent/20 blur-3xl" />
+        </div>
+        <div className="relative container mx-auto max-w-3xl text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/20 text-primary mb-4">
             <HiQuestionMarkCircle className="w-8 h-8" />
           </div>
@@ -62,7 +66,7 @@ export default function FAQ() {
             return (
               <div
                 key={index}
-                className="bg-white rounded-xl shadow-md border border-primary/10 overflow-hidden"
+                className="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
               >
                 <button
                   type="button"

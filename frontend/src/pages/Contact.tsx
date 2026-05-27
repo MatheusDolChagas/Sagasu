@@ -1,82 +1,183 @@
-import { HiChatBubbleLeftRight, HiEnvelope, HiMapPin } from 'react-icons/hi2';
+import { useState } from 'react';
+import { HiChatBubbleLeftRight, HiEnvelope, HiMapPin, HiPaperAirplane } from 'react-icons/hi2';
+import api from '../services/api';
+import { toast } from 'react-hot-toast';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { isValidEmail, normalizeEmail } from '@/lib/validateEmail';
 
 const WHATSAPP_NUMBER = '5531995617797';
 const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}`;
 
 export default function Contact() {
+  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const [sending, setSending] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (form.name.trim().length < 2) {
+      toast.error('Informe seu nome');
+      return;
+    }
+    if (!isValidEmail(form.email)) {
+      toast.error('Email inválido');
+      return;
+    }
+    if (form.message.trim().length < 10) {
+      toast.error('Escreva uma mensagem com pelo menos 10 caracteres');
+      return;
+    }
+    setSending(true);
+    try {
+      await api.post('/contact', {
+        name: form.name.trim(),
+        email: normalizeEmail(form.email),
+        subject: form.subject.trim() || undefined,
+        message: form.message.trim(),
+      });
+      toast.success('Mensagem enviada! Obrigado pelo contato.');
+      setForm({ name: '', email: '', subject: '', message: '' });
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { message?: string } } };
+      toast.error(ax.response?.data?.message || 'Não foi possível enviar. Tente mais tarde.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen">
-      {/* Hero */}
-      <section className="bg-dark text-white py-12 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
-          <h1 className="text-4xl font-bold mb-3">Contato</h1>
+      <section className="relative overflow-hidden bg-gradient-to-r from-dark via-dark/90 to-accent/30 px-4 py-12 text-white">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -left-16 -top-16 h-64 w-64 rounded-full bg-primary/25 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-accent/25 blur-3xl" />
+        </div>
+        <div className="relative container mx-auto max-w-3xl text-center">
+          <h1 className="mb-3 text-4xl font-bold">Contato</h1>
           <p className="text-primary/90">
-            Estamos aqui para ajudar. Escolha a melhor forma de falar conosco.
+            Envie uma mensagem pela plataforma ou use os canais abaixo.
           </p>
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-10 max-w-4xl">
-        {/* WhatsApp - destaque */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border-2 border-primary/30 overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full -translate-y-1/2 translate-x-1/2" />
-          <div className="relative flex flex-col md:flex-row md:items-center gap-6">
-            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-green-500/20 flex items-center justify-center text-green-600">
-              <HiChatBubbleLeftRight className="w-8 h-8" />
+      <div className="container mx-auto max-w-4xl px-4 py-10">
+        <Card className="mb-8 overflow-hidden shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <HiPaperAirplane className="h-6 w-6 text-primary" aria-hidden />
+              Enviar mensagem
+            </CardTitle>
+            <CardDescription>
+              Sua mensagem fica registrada para a equipe do Sagasu, que poderá responder pelos
+              canais indicados nesta página.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="c-name">Nome</Label>
+                  <Input
+                    id="c-name"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    required
+                    autoComplete="name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="c-email">Email</Label>
+                  <Input
+                    id="c-email"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-subject">Assunto (opcional)</Label>
+                <Input
+                  id="c-subject"
+                  value={form.subject}
+                  onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-msg">Mensagem</Label>
+                <textarea
+                  id="c-msg"
+                  rows={5}
+                  value={form.message}
+                  onChange={(e) => setForm({ ...form, message: e.target.value })}
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-dark ring-offset-background placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={sending} className="w-full sm:w-auto">
+                {sending ? 'Enviando…' : 'Enviar mensagem'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <div className="relative mb-8 overflow-hidden rounded-2xl border border-border bg-card p-8 shadow-lg">
+          <div className="absolute right-0 top-0 h-32 w-32 translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20" />
+          <div className="relative flex flex-col gap-6 md:flex-row md:items-center">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-accent/25 text-dark">
+              <HiChatBubbleLeftRight className="h-8 w-8" />
             </div>
-            <div className="flex-grow">
-              <h2 className="text-xl font-bold text-dark mb-1">WhatsApp</h2>
-              <p className="text-dark/80 mb-4">
-                Resposta rápida pelo WhatsApp. Envie sua dúvida, sugestão ou pedido de apoio.
+            <div className="min-w-0 flex-grow">
+              <h2 className="mb-1 text-xl font-bold text-dark">WhatsApp</h2>
+              <p className="mb-4 text-dark/80">
+                Resposta rápida. Envie dúvida, sugestão ou pedido de apoio.
               </p>
               <a
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-600 transition-colors shadow-md"
+                className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 font-semibold text-accent-fg shadow-md transition-colors hover:opacity-95"
               >
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                </svg>
                 Chamar no WhatsApp
               </a>
             </div>
           </div>
         </div>
 
-        {/* Outros canais */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl shadow-md p-6 border border-primary/10 hover:shadow-lg transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-primary/30 flex items-center justify-center text-dark mb-4">
-              <HiEnvelope className="w-6 h-6" />
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/30 text-dark">
+              <HiEnvelope className="h-6 w-6" />
             </div>
-            <h3 className="text-lg font-semibold text-dark mb-2">E-mail</h3>
-            <p className="text-dark/80 text-sm mb-3">
-              Para parcerias, imprensa ou contato institucional.
-            </p>
+            <h3 className="mb-2 text-lg font-semibold text-dark">E-mail</h3>
+            <p className="mb-3 text-sm text-dark/80">Parcerias, imprensa ou contato institucional.</p>
             <a
               href="mailto:contato@sagasu.com.br"
-              className="text-primary font-medium hover:underline"
+              className="font-medium text-primary hover:underline"
             >
               contato@sagasu.com.br
             </a>
           </div>
 
-          <div className="bg-white rounded-xl shadow-md p-6 border border-primary/10 hover:shadow-lg transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-primary/30 flex items-center justify-center text-dark mb-4">
-              <HiMapPin className="w-6 h-6" />
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/30 text-dark">
+              <HiMapPin className="h-6 w-6" />
             </div>
-            <h3 className="text-lg font-semibold text-dark mb-2">Onde estamos</h3>
-            <p className="text-dark/80 text-sm">
-              Sagasu é um projeto desenvolvido no Brasil, com foco em apoiar famílias e comunidades em todo o território nacional.
+            <h3 className="mb-2 text-lg font-semibold text-dark">Onde estamos</h3>
+            <p className="text-sm text-dark/80">
+              Projeto no Brasil, apoiando famílias e comunidades em todo o território nacional.
             </p>
           </div>
         </div>
 
-        {/* Mensagem de apoio */}
         <div className="mt-10 text-center">
-          <p className="text-dark/80 text-sm max-w-xl mx-auto">
-            Em caso de <strong>emergência ou pessoa em perigo imediato</strong>, ligue para a polícia (190) ou SAMU (192). O Sagasu complementa essas ações com divulgação e rede colaborativa.
+          <p className="mx-auto max-w-xl text-sm text-dark/80">
+            Em caso de <strong>emergência</strong>, ligue <strong>190</strong> ou <strong>192</strong>
+            . O Sagasu complementa com divulgação e rede colaborativa.
           </p>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 
 const api = axios.create({
   baseURL: '/api',
@@ -21,9 +22,14 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token expirado ou inválido
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      // Limpa Zustand + persist (`auth-storage`); só remover `token` deixava sessão inválida
+      // reidratada e gerava loop: /notifications → 401 → reload → mesmo token.
+      useAuthStore.getState().logout();
+      const path = window.location.pathname;
+      const isAuthPage = /\/(login|register)\/?$/.test(path);
+      if (!isAuthPage) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

@@ -115,6 +115,88 @@ npm run dev
 
 O backend estará rodando em `http://localhost:3001`
 
+### Email de confirmação de cadastro
+
+Sem provedor de email, o cadastro é criado mas **nenhum email é enviado**. Em desenvolvimento, a tela de cadastro mostra o link de confirmação na própria página.
+
+Configure **uma** das opções no `backend/.env` e reinicie o servidor:
+
+**Resend (mais simples)** — [resend.com](https://resend.com) → API Keys:
+
+```env
+RESEND_API_KEY=re_xxxxxxxx
+EMAIL_FROM=Sagasu <onboarding@resend.dev>
+FRONTEND_URL=http://localhost:3000
+```
+
+**SMTP (Gmail)** — use [senha de app](https://myaccount.google.com/apppasswords):
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=seu@gmail.com
+SMTP_PASS=sua-senha-de-app
+EMAIL_FROM=Sagasu <seu@gmail.com>
+FRONTEND_URL=http://localhost:3000
+```
+
+Conta já criada sem email? Use **Reenviar confirmação** no login ou confirme manualmente no banco (`emailVerified = true` no Prisma Studio).
+
+### Perfis de autoridade (POLICE, NGO, ADMIN)
+
+Usuários comuns se cadastram em `/register` com papel `USER`. Para dar acesso de autoridade:
+
+**Opção A — Prisma Studio (recomendado para desenvolvimento)**
+
+```bash
+cd backend
+npx prisma studio
+```
+
+Na tabela `users`, edite o campo `role` para `POLICE`, `NGO` ou `ADMIN`.
+
+**Opção B — SQL direto no PostgreSQL**
+
+```sql
+UPDATE users SET role = 'POLICE' WHERE email = 'email@exemplo.gov.br';
+-- ou: 'NGO' / 'ADMIN'
+```
+
+**Opção C — API (somente usuário já existente com role ADMIN logado)**
+
+```http
+POST /api/auth/users/promote-role
+Authorization: Bearer <token_admin>
+Content-Type: application/json
+
+{
+  "email": "email@exemplo.gov.br",
+  "role": "POLICE"
+}
+```
+
+Roles válidos: `USER`, `POLICE`, `NGO`, `ADMIN`.
+
+### Validação de imagens (OpenAI)
+
+No `.env` do backend, configure:
+
+```env
+OPENAI_API_KEY=sk-xxxxxxxx
+OPENAI_VISION_MODEL=gpt-4o-mini
+OPENAI_MODERATION_MODEL=omni-moderation-latest
+MEDIA_NSFW_THRESHOLD=0.82
+MEDIA_AVATAR_PERSON_THRESHOLD=0.5
+MEDIA_AVATAR_RELAXED=true
+```
+
+- **Moderação** (`omni-moderation-latest`): bloqueia conteúdo sexual, violento ou impróprio.
+- **Visão** (`gpt-4o-mini`): confirma se há pessoa na foto de perfil ou na foto principal do caso (aceita selfies e espelho melhor que modelos antigos).
+- Sem `OPENAI_API_KEY` ou com chave inválida: a validação **rejeita** avatar e foto principal (não aceita “no escuro”).
+- `MEDIA_AVATAR_RELAXED=true` só se quiser, explicitamente, aceitar avatar só por formato/tamanho quando a IA falhar (não use em produção).
+- Após alterar o `.env`, **reinicie** o backend (`pnpm run dev`).
+
 ### Comandos Úteis do Docker
 
 - **Parar o banco de dados:**

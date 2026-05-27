@@ -11,10 +11,16 @@ import {
   HiShieldCheck,
   HiChatBubbleLeftRight,
   HiHeart,
+  HiShare,
 } from 'react-icons/hi2';
+import { toast } from 'react-hot-toast';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
-import type { Case, Tip } from '../types';
+import { isSupabaseConfigured, uploadCasePhoto } from '../lib/supabase';
+import type { Case, Tip, Sighting } from '../types';
+import ShareBar from '../components/ShareBar';
+import CaseFeed from '../components/CaseFeed';
+import AddressSuggestField from '../components/AddressSuggestField';
 
 interface CaseWithRelations extends Case {
   user?: {
@@ -38,10 +44,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  ACTIVE: 'bg-green-100 text-green-800 border-green-200',
-  FOUND: 'bg-primary/30 text-dark border-primary/50',
-  CLOSED: 'bg-gray-100 text-gray-700 border-gray-200',
-  ARCHIVED: 'bg-gray-100 text-gray-500 border-gray-200',
+  ACTIVE:
+    'border border-emerald-500/45 bg-emerald-500/15 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  FOUND:
+    'border border-sky-500/45 bg-sky-500/15 text-sky-900 dark:bg-sky-500/20 dark:text-sky-300',
+  CLOSED:
+    'border border-amber-500/45 bg-amber-500/15 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
+  ARCHIVED: 'border border-border bg-muted-bg/50 text-dark',
 };
 
 export default function CaseDetail() {
@@ -59,6 +68,23 @@ export default function CaseDetail() {
   const [tipSubmitting, setTipSubmitting] = useState(false);
   const [volunteerStatus, setVolunteerStatus] = useState<'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED'>('NONE');
   const [volunteerLoading, setVolunteerLoading] = useState(false);
+  const [caseVolunteers, setCaseVolunteers] = useState<any[]>([]);
+  const [caseVolunteersLoading, setCaseVolunteersLoading] = useState(false);
+  const [sightingsByCase, setSightingsByCase] = useState<Sighting[]>([]);
+  const [attachmentsBusy, setAttachmentsBusy] = useState(false);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [promotingSightingId, setPromotingSightingId] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState('');
+
+  useEffect(() => {
+    setShareUrl(typeof window !== 'undefined' ? window.location.href : '');
+  }, [id]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setTipAnonymous(true);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (!id) return;
@@ -68,7 +94,8 @@ export default function CaseDetail() {
       try {
         const res = await api.get(`/cases/${id}`);
         if (res.data.success) {
-          setCaseItem(res.data.data);
+          const c = res.data.data as CaseWithRelations;
+          setCaseItem(c);
         } else {
           setError('Não foi possível carregar o caso.');
         }
@@ -135,6 +162,82 @@ export default function CaseDetail() {
 
   const isOwner = currentUser && caseItem && caseItem.userId === currentUser.id;
 
+  const canExport =
+    currentUser &&
+    caseItem &&
+    (isOwner || ['POLICE', 'ADMIN', 'NGO'].includes(currentUser.role));
+
+  const downloadExport = async (format: 'json' | 'txt') => {
+    if (!id) return;
+    try {
+      const res = await api.get(`/cases/${id}/export-authorities`, {
+        params: { format },
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], {
+        type: format === 'json' ? 'application/json' : 'text/plain',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sagasu-caso-${id.slice(0, 8)}-autoridades.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Não foi possível gerar o arquivo. Verifique se você tem permissão.');
+    }
+  };
+
+  const mailtoAuthorities = () => {
+    if (!caseItem) return;
+    const subject = encodeURIComponent(`Sagasu — Encaminhamento: ${caseItem.title}`);
+    const body = encodeURIComponent(
+      [
+        'Solicito análise deste caso cadastrado na plataforma Sagasu.',
+        '',
+        `Caso: ${caseItem.title}`,
+        `Pessoa: ${caseItem.missingPersonName}`,
+        `Link: ${window.location.href}`,
+        '',
+        'Anexo: utilize a opção "Exportar JSON" ou "Exportar texto" na página do caso para obter o dossiê completo.',
+      ].join('\n'),
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  useEffect(() => {
+    const fetchCaseVolunteers = async () => {
+      if (!id || !currentUser || !isOwner) return;
+      setCaseVolunteersLoading(true);
+      try {
+        const res = await api.get(`/volunteers/case/${id}`);
+        if (res.data.success) {
+          setCaseVolunteers(res.data.data);
+        }
+      } catch {
+        setCaseVolunteers([]);
+      } finally {
+        setCaseVolunteersLoading(false);
+      }
+    };
+    fetchCaseVolunteers();
+  }, [id, currentUser, isOwner]);
+
+  useEffect(() => {
+    const fetchSightingsByCase = async () => {
+      if (!id || !isOwner) return;
+      try {
+        const res = await api.get(`/sightings/case/${id}`);
+        if (res.data.success) {
+          setSightingsByCase(res.data.data as Sighting[]);
+        }
+      } catch {
+        setSightingsByCase([]);
+      }
+    };
+    fetchSightingsByCase();
+  }, [id, isOwner]);
+
   const handleSubmitTip = async (event: FormEvent) => {
     event.preventDefault();
     if (!id || !tipContent.trim()) return;
@@ -143,7 +246,7 @@ export default function CaseDetail() {
       const payload: Partial<Tip> & { isAnonymous: boolean } = {
         content: tipContent.trim(),
         location: tipLocation.trim() || undefined,
-        isAnonymous: tipAnonymous,
+        isAnonymous: currentUser ? tipAnonymous : true,
       };
       const res = await api.post(`/tips/case/${id}`, payload);
       if (res.data.success) {
@@ -179,6 +282,82 @@ export default function CaseDetail() {
     }
   };
 
+  const handleUpdateVolunteerStatus = async (volunteerId: string, status: 'APPROVED' | 'REJECTED') => {
+    try {
+      const res = await api.put(`/volunteers/${volunteerId}/status`, { status });
+      if (res.data.success) {
+        setCaseVolunteers((prev) =>
+          prev.map((v) => (v.id === volunteerId ? { ...v, status: res.data.data.status } : v)),
+        );
+      }
+    } catch {
+      alert('Não foi possível atualizar o status do voluntário.');
+    }
+  };
+
+  const handleAttachMedia = async () => {
+    if (!id || !attachmentFile) return;
+    if (!isSupabaseConfigured()) {
+      toast.error('Envio de imagem indisponível no momento.');
+      return;
+    }
+    setAttachmentsBusy(true);
+    try {
+      const imageUrl = await uploadCasePhoto(attachmentFile);
+      const v = await api.post('/media/validate', { imageUrl, context: 'general' });
+      if (!v.data?.success) {
+        toast.error(v.data?.message || 'Imagem não passou na validação.');
+        return;
+      }
+
+      const res = await api.post(`/media/case/${id}/attachments`, { imageUrl });
+      if (res.data.success) {
+        setCaseItem((prev) =>
+          prev
+            ? { ...prev, media: [...(prev.media ?? []), res.data.data] }
+            : prev,
+        );
+        setAttachmentFile(null);
+        toast.success('Foto anexada ao caso.');
+      }
+    } catch (error: unknown) {
+      const msg =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null;
+      toast.error(msg || 'Não foi possível anexar imagem.');
+    } finally {
+      setAttachmentsBusy(false);
+    }
+  };
+
+  const handlePromoteSighting = async (sightingId: string) => {
+    if (!id) return;
+    setPromotingSightingId(sightingId);
+    try {
+      const res = await api.post(`/media/case/${id}/from-sighting`, { sightingId });
+      if (res.data.success && res.data.data?.url) {
+        const exists = (caseItem?.media ?? []).some((m) => m.url === res.data.data.url);
+        if (!exists) {
+          setCaseItem((prev) =>
+            prev
+              ? { ...prev, media: [...(prev.media ?? []), res.data.data] }
+              : prev,
+          );
+        }
+        toast.success('Foto do avistamento adicionada em Fotos e anexos.');
+      }
+    } catch (error: unknown) {
+      const msg =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null;
+      toast.error(msg || 'Não foi possível promover o avistamento.');
+    } finally {
+      setPromotingSightingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -208,7 +387,7 @@ export default function CaseDetail() {
   return (
     <div className="min-h-screen">
       {/* Cabeçalho com navegação */}
-      <div className="bg-dark text-white py-6 px-4">
+      <div className="bg-zinc-900 px-4 py-6 text-white dark:bg-zinc-950">
         <div className="container mx-auto max-w-4xl">
           <button
             type="button"
@@ -242,9 +421,19 @@ export default function CaseDetail() {
         </div>
       </div>
 
+      <div className="container mx-auto px-4 max-w-4xl -mt-6 relative z-10 mb-4">
+        {caseItem && shareUrl ? (
+          <ShareBar
+            title={caseItem.title}
+            description={caseItem.description}
+            url={shareUrl}
+          />
+        ) : null}
+      </div>
+
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Descrição */}
-        <section className="bg-white rounded-xl shadow-md p-6 mb-6 border border-primary/10">
+        <section className="bg-card rounded-2xl border border-border shadow-sm p-6 mb-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-dark mb-3">
             <HiDocumentText className="w-5 h-5 text-primary" />
             Descrição
@@ -252,8 +441,10 @@ export default function CaseDetail() {
           <p className="text-dark whitespace-pre-wrap">{caseItem.description}</p>
         </section>
 
+        {id && <CaseFeed caseId={id} isOwner={!!isOwner} />}
+
         {/* Dados da pessoa desaparecida */}
-        <section className="bg-white rounded-xl shadow-md p-6 mb-6 border border-primary/10">
+        <section className="bg-card rounded-2xl border border-border shadow-sm p-6 mb-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-dark mb-4">
             <HiUser className="w-5 h-5 text-primary" />
             Pessoa desaparecida
@@ -298,9 +489,38 @@ export default function CaseDetail() {
           </ul>
         </section>
 
+        {canExport && (
+          <section className="bg-card rounded-2xl border border-border shadow-sm p-6 mb-6">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-dark mb-2">
+              <HiShare className="w-5 h-5 text-forest" />
+              Compartilhar com autoridades
+            </h2>
+            <p className="text-dark/70 text-sm mb-4">
+              Gere um dossiê com dados do caso, dicas, voluntários, avistamentos e links de mídia
+              para encaminhar a órgãos de segurança ou defensoria.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => downloadExport('txt')}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                Exportar texto
+              </button>
+              <button
+                type="button"
+                onClick={mailtoAuthorities}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-dark hover:bg-muted-bg/80"
+              >
+                Encaminhar por e-mail
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* Mídia (fotos) */}
         {caseItem.media && caseItem.media.length > 0 && (
-          <section className="bg-white rounded-xl shadow-md p-6 mb-6 border border-primary/10">
+          <section className="bg-card rounded-2xl border border-border shadow-sm p-6 mb-6">
             <h2 className="text-lg font-semibold text-dark mb-4">Fotos e anexos</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {caseItem.media.map((m) => (
@@ -333,8 +553,76 @@ export default function CaseDetail() {
           </section>
         )}
 
+        {isOwner && (
+          <section className="bg-card rounded-2xl border border-border shadow-sm p-6 mb-6">
+            <h2 className="text-lg font-semibold text-dark mb-2">Adicionar fotos e anexos</h2>
+            <p className="text-sm text-dark/75 mb-4">
+              Além da foto principal da pessoa, você pode anexar imagens de roupas, objetos ou
+              outros itens relevantes para ajudar nas buscas.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
+                className="text-sm text-dark file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-medium file:text-primary-fg"
+              />
+              <button
+                type="button"
+                disabled={attachmentsBusy || !attachmentFile}
+                onClick={() => void handleAttachMedia()}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                {attachmentsBusy ? 'Anexando...' : 'Anexar imagem'}
+              </button>
+            </div>
+
+            {sightingsByCase.length > 0 ? (
+              <div className="mt-6 border-t border-border pt-4">
+                <h3 className="text-sm font-semibold text-dark mb-3">
+                  Usar fotos de avistamentos em “Fotos e anexos”
+                </h3>
+                <ul className="space-y-3">
+                  {sightingsByCase.slice(0, 8).map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted-bg/35 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={s.photoUrl}
+                          alt=""
+                          className="h-14 w-14 rounded-md border border-border object-cover"
+                        />
+                        <div>
+                          <p className="text-xs text-dark/70">
+                            {formatDate(s.createdAt)}
+                          </p>
+                          {s.description ? (
+                            <p className="line-clamp-1 text-sm text-dark">{s.description}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={promotingSightingId === s.id}
+                        onClick={() => void handlePromoteSighting(s.id)}
+                        className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-dark hover:bg-muted-bg/80 disabled:opacity-60"
+                      >
+                        {promotingSightingId === s.id
+                          ? 'Adicionando...'
+                          : 'Adicionar em Fotos e anexos'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </section>
+        )}
+
         {/* Dicas - formulário e lista */}
-        <section className="bg-white rounded-xl shadow-md p-6 mb-6 border border-primary/10">
+        <section className="bg-card rounded-2xl border border-border shadow-sm p-6 mb-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-dark mb-4">
             <HiChatBubbleLeftRight className="w-5 h-5 text-primary" />
             Dicas e informações
@@ -352,7 +640,7 @@ export default function CaseDetail() {
                 value={tipContent}
                 onChange={(e) => setTipContent(e.target.value)}
                 rows={3}
-                className="w-full border border-primary/30 rounded-lg px-3 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-white"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="Descreva o que você viu, horário, características, etc."
                 required
               />
@@ -361,28 +649,32 @@ export default function CaseDetail() {
               <label className="block text-sm font-medium text-dark mb-1">
                 Local (opcional)
               </label>
-              <input
-                type="text"
+              <AddressSuggestField
                 value={tipLocation}
-                onChange={(e) => setTipLocation(e.target.value)}
-                className="w-full border border-primary/30 rounded-lg px-3 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-white"
-                placeholder="Ex: Praça Central, próximo ao mercado X"
+                onChange={setTipLocation}
+                placeholder="Digite o endereço (ex.: Praça da Liberdade, Belo Horizonte)"
               />
             </div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <label className="inline-flex items-center gap-2 text-sm text-dark/80">
-                <input
-                  type="checkbox"
-                  checked={tipAnonymous}
-                  onChange={(e) => setTipAnonymous(e.target.checked)}
-                  className="rounded border-primary/40 text-primary focus:ring-primary"
-                />
-                Enviar como anônimo
-              </label>
+              {currentUser ? (
+                <label className="inline-flex items-center gap-2 text-sm text-dark/80">
+                  <input
+                    type="checkbox"
+                    checked={tipAnonymous}
+                    onChange={(e) => setTipAnonymous(e.target.checked)}
+                    className="rounded border-primary/40 text-primary focus:ring-primary"
+                  />
+                  Enviar como anônimo
+                </label>
+              ) : (
+                <p className="text-sm text-dark/75">
+                  Sem login, sua dica será enviada <strong>sempre de forma anônima</strong>.
+                </p>
+              )}
               <button
                 type="submit"
                 disabled={tipSubmitting || !tipContent.trim()}
-                className="px-4 py-2 bg-dark text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
               >
                 {tipSubmitting ? 'Enviando...' : 'Enviar dica'}
               </button>
@@ -409,7 +701,11 @@ export default function CaseDetail() {
                     <p className="text-dark mb-1 whitespace-pre-wrap">{tip.content}</p>
                     <div className="flex flex-wrap justify-between items-center gap-2 text-xs text-dark/70">
                       <span>
-                        {tip.isAnonymous ? 'Anônimo' : 'Colaborador identificado'}
+                        {tip.isAnonymous || !tip.user
+                          ? 'Anônimo'
+                          : isOwner
+                            ? `Por ${tip.user.name}`
+                            : 'Colaborador identificado'}
                         {tip.location ? ` • ${tip.location}` : ''}
                       </span>
                       <span>
@@ -423,41 +719,100 @@ export default function CaseDetail() {
           </div>
         </section>
 
-        {/* Quero ajudar - CTA */}
-        <section className="bg-primary/20 rounded-xl p-6 mb-8 border border-primary/30">
+        {/* Quero ajudar / Voluntários */}
+        <section className="bg-muted-bg/60 rounded-2xl border border-border p-6 mb-8 shadow-sm">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-dark mb-2">
             <HiHeart className="w-5 h-5 text-primary" />
-            Quero ajudar
+            {isOwner ? 'Voluntários deste caso' : 'Quero ajudar'}
           </h2>
-          <p className="text-dark/80 text-sm mb-4">
-            Inscreva-se como voluntário para participar de buscas, grupos de apoio e receber
-            atualizações sobre este caso.
-          </p>
-          {!currentUser ? (
-            <Link
-              to="/login"
-              className="inline-block px-4 py-2 bg-dark text-white rounded-lg text-sm font-medium hover:opacity-90"
-            >
-              Entrar para se inscrever
-            </Link>
-          ) : volunteerStatus === 'NONE' ? (
-            <button
-              type="button"
-              onClick={handleVolunteer}
-              disabled={volunteerLoading}
-              className="px-4 py-2 bg-dark text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {volunteerLoading ? 'Enviando...' : 'Quero ajudar neste caso'}
-            </button>
+          {isOwner ? (
+            <>
+              <p className="text-dark/80 text-sm mb-4">
+                Aqui você vê quem se inscreveu como voluntário para este caso e pode aprovar ou
+                rejeitar as solicitações.
+              </p>
+              {caseVolunteersLoading ? (
+                <p className="text-dark/70 text-sm">Carregando voluntários...</p>
+              ) : caseVolunteers.length === 0 ? (
+                <p className="text-dark/70 text-sm">
+                  Ainda não há voluntários cadastrados para este caso.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {caseVolunteers.map((v) => (
+                    <li
+                      key={v.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                    >
+                      <div>
+                        <p className="font-medium text-dark">
+                          {v.user?.name ?? 'Voluntário'}
+                        </p>
+                        <p className="text-xs text-dark/70">
+                          Status:{' '}
+                          <strong>
+                            {v.status === 'PENDING' && 'Aguardando aprovação'}
+                            {v.status === 'APPROVED' && 'Aprovado'}
+                            {v.status === 'REJECTED' && 'Rejeitado'}
+                          </strong>
+                        </p>
+                      </div>
+                      {v.status === 'PENDING' && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateVolunteerStatus(v.id, 'APPROVED')}
+                            className="px-3 py-1 text-xs rounded bg-dark text-white hover:opacity-90"
+                          >
+                            Aprovar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateVolunteerStatus(v.id, 'REJECTED')}
+                            className="rounded border border-border bg-card px-3 py-1 text-xs text-dark hover:bg-muted-bg/80"
+                          >
+                            Rejeitar
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           ) : (
-            <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white text-sm text-dark border border-primary/40">
-              Status como voluntário:
-              <strong>
-                {volunteerStatus === 'PENDING' && 'Aguardando aprovação'}
-                {volunteerStatus === 'APPROVED' && 'Aprovado'}
-                {volunteerStatus === 'REJECTED' && 'Rejeitado'}
-              </strong>
-            </span>
+            <>
+              <p className="text-dark/80 text-sm mb-4">
+                Inscreva-se como voluntário para participar de buscas, grupos de apoio e receber
+                atualizações sobre este caso.
+              </p>
+              {!currentUser ? (
+                <Link
+                  to="/login"
+                  className="inline-block rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900"
+                >
+                  Entrar para se inscrever
+                </Link>
+              ) : volunteerStatus === 'NONE' ? (
+                <button
+                  type="button"
+                  onClick={handleVolunteer}
+                  disabled={volunteerLoading}
+                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+                >
+                  {volunteerLoading ? 'Enviando...' : 'Quero ajudar neste caso'}
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-dark">
+                  Status como voluntário:
+                  <strong>
+                    {volunteerStatus === 'PENDING' && 'Aguardando aprovação'}
+                    {volunteerStatus === 'APPROVED' && 'Aprovado'}
+                    {volunteerStatus === 'REJECTED' && 'Rejeitado'}
+                  </strong>
+                </span>
+              )}
+            </>
           )}
         </section>
 

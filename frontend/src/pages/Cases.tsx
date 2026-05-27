@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Case } from '../types';
 import api from '../services/api';
 import CaseCard from '../components/CaseCard';
 import { toast } from 'react-hot-toast';
+import { Button } from '@/components/ui/button';
+import { useAuthStore } from '../store/authStore';
 
 interface CaseWithUser extends Case {
   user?: {
@@ -13,6 +16,7 @@ interface CaseWithUser extends Case {
 }
 
 export default function Cases() {
+  const { user } = useAuthStore();
   const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -53,7 +57,18 @@ export default function Cases() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6 text-dark">Casos de Desaparecimento</h1>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-bold text-dark">Casos de desaparecimento</h1>
+        {user ? (
+          <Button asChild size="lg">
+            <Link to="/cases/create">Criar caso</Link>
+          </Button>
+        ) : (
+          <Button asChild variant="outline" size="lg">
+            <Link to="/login">Entrar para criar caso</Link>
+          </Button>
+        )}
+      </div>
       
       {isLoading ? (
         <div className="text-center py-12">
@@ -66,9 +81,9 @@ export default function Cases() {
           ))}
         </div>
       ) : (
-        <div className="bg-white p-6 rounded-lg shadow-md text-center">
-          <p className="text-dark text-lg">Nenhum caso encontrado no momento.</p>
-          <p className="text-dark mt-2">Seja o primeiro a criar um caso!</p>
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm text-center">
+          <p className="text-dark text-lg font-semibold">Nenhum caso encontrado no momento.</p>
+          <p className="text-dark/70 mt-2">Seja o primeiro a criar um caso!</p>
         </div>
       )}
     </div>

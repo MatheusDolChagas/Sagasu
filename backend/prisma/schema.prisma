@@ -17,10 +17,15 @@ model User {
   password      String
   name          String
   phone         String?
+  avatarUrl     String?
   role          UserRole @default(USER)
   isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  // Conta pública: false até confirmar email pelo link
+  emailVerified              Boolean   @default(false)
+  emailVerificationToken     String?   @unique
+  emailVerificationExpires   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relacionamentos
   cases         Case[]
@@ -29,6 +34,8 @@ model User {
   notifications Notification[]
   groups        Group[]
   groupMembers  GroupMember[]
+  groupComments GroupComment[]
+  sightings     Sighting[]
 
   @@map("users")
 }
@@ -49,6 +56,8 @@ model Case {
   age             Int?
   gender          String?
   lastSeenLocation String?
+  lastSeenLatitude  Float?
+  lastSeenLongitude Float?
   lastSeenDate    DateTime?
   status          CaseStatus  @default(ACTIVE)
   isVerified      Boolean     @default(false)
@@ -63,6 +72,7 @@ model Case {
   groups          Group[]
   media           Media[]
   notifications   Notification[]
+  sightings       Sighting[]
 
   @@map("cases")
 }
@@ -96,6 +106,24 @@ model Tip {
   @@map("tips")
 }
 
+// Avistamento com foto e localização (relatado por usuários)
+model Sighting {
+  id          String   @id @default(uuid())
+  description String?  @db.Text
+  latitude    Float
+  longitude   Float
+  photoUrl    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("sightings")
+}
+
 // Voluntário individual
 model Volunteer {
   id          String   @id @default(uuid())
@@ -125,6 +153,7 @@ model Group {
   name        String
   description String?  @db.Text
   isActive    Boolean  @default(true)
+  isPrivate   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -134,6 +163,7 @@ model Group {
   leaderId    String
   leader      User     @relation(fields: [leaderId], references: [id], onDelete: Cascade)
   members     GroupMember[]
+  comments    GroupComment[]
 
   @@map("groups")
 }
@@ -157,6 +187,20 @@ model GroupMember {
 enum GroupRole {
   LEADER
   MEMBER
+}
+
+model GroupComment {
+  id        String   @id @default(uuid())
+  content   String?  @db.Text
+  imageUrl  String?
+  createdAt DateTime @default(now())
+
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("group_comments")
 }
 
 // Mídia (fotos, vídeos)
@@ -207,4 +251,16 @@ enum NotificationType {
   VOLUNTEER_JOINED
   CASE_RESOLVED
   SYSTEM
+}
+
+// Mensagens do formulário de contato (site)
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String?
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@map("contact_messages")
 }

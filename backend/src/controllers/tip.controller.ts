@@ -3,6 +3,7 @@ import prisma from '../config/database';
 import { AppError } from '../utils/errors';
 import { z } from 'zod';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { onTipCreated } from '../services/realtime.service';
 
 const createTipSchema = z.object({
   content: z.string().min(5, 'Conteúdo da dica deve ter pelo menos 5 caracteres'),
@@ -26,11 +27,14 @@ export const createTip = async (req: AuthRequest | Request, res: Response) => {
     }
 
     const validatedData = createTipSchema.parse(req.body);
+    const authReq = req as AuthRequest;
+
+    const isAnonymous =
+      !authReq.userId || validatedData.isAnonymous !== false;
 
     let userId: string | null = null;
-
-    if ('userId' in req && req.userId && !validatedData.isAnonymous) {
-      userId = req.userId;
+    if (authReq.userId && !isAnonymous) {
+      userId = authReq.userId;
     }
 
     const tip = await prisma.tip.create({
@@ -39,11 +43,25 @@ export const createTip = async (req: AuthRequest | Request, res: Response) => {
         location: validatedData.location || null,
         latitude: validatedData.latitude ?? null,
         longitude: validatedData.longitude ?? null,
-        isAnonymous: validatedData.isAnonymous ?? true,
+        isAnonymous,
         caseId,
         userId,
       },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
+
+    try {
+      await onTipCreated(caseId, tip.id, userId, tip.content);
+    } catch (e) {
+      console.error('Realtime tip:', e);
+    }
 
     res.status(201).json({
       success: true,
@@ -89,6 +107,14 @@ export const getTipsByCase = async (req: Request, res: Response) => {
 
     const tips = await prisma.tip.findMany({
       where: { caseId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
       orderBy: {
         createdAt: 'desc',
       },

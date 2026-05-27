@@ -17,6 +17,8 @@ export interface Case {
   age?: number;
   gender?: string;
   lastSeenLocation?: string;
+  lastSeenLatitude?: number | null;
+  lastSeenLongitude?: number | null;
   lastSeenDate?: string;
   status: 'ACTIVE' | 'FOUND' | 'CLOSED' | 'ARCHIVED';
   isVerified: boolean;
@@ -36,6 +38,10 @@ export interface Tip {
   createdAt: string;
   caseId: string;
   userId?: string;
+  user?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface Volunteer {
@@ -44,6 +50,14 @@ export interface Volunteer {
   userId: string;
   caseId: string;
   createdAt: string;
+  user?: {
+    id: string;
+    name: string;
+  };
+  case?: {
+    id: string;
+    title: string;
+  };
 }
 
 export interface Group {
@@ -65,7 +79,34 @@ export interface Group {
   members?: Array<{
     role: string;
     joinedAt: string;
+    user?: {
+      id: string;
+      name: string;
+      avatarUrl?: string | null;
+    };
   }>;
+}
+
+export interface Sighting {
+  id: string;
+  description?: string | null;
+  latitude: number;
+  longitude: number;
+  photoUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  caseId: string;
+  userId?: string | null;
+  case?: {
+    id: string;
+    title: string;
+    missingPersonName: string;
+    status: string;
+  };
+  user?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface Notification {
@@ -78,3 +119,25 @@ export interface Notification {
   userId: string;
   caseId?: string;
 }
+
+/** Notificação com caso (API + socket) */
+export type AppNotification = Notification & {
+  case?: { id: string; title: string };
+};
+
+export type CaseFeedItem =
+  | { type: 'TIP'; id: string; createdAt: string; preview: string }
+  | {
+      type: 'VOLUNTEER';
+      id: string;
+      createdAt: string;
+      volunteerName: string;
+      status: string;
+    }
+  | {
+      type: 'SIGHTING';
+      id: string;
+      createdAt: string;
+      photoUrl: string;
+      description?: string | null;
+    };

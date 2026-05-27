@@ -35,10 +35,14 @@ export default function About() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <section className="bg-dark text-white py-16 px-4">
-        <div className="container mx-auto max-w-4xl text-center">
+      <section className="relative overflow-hidden bg-gradient-to-r from-dark via-dark/95 to-primary/20 text-white py-16 px-4">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-20 -left-20 w-72 h-72 rounded-full bg-primary/25 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-accent/25 blur-3xl" />
+        </div>
+        <div className="relative container mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">Sobre o Sagasu</h1>
-          <p className="text-xl text-primary/90 max-w-2xl mx-auto">
+          <p className="text-xl text-primary/95 max-w-2xl mx-auto">
             Um sistema web colaborativo para apoiar a localização de idosos desaparecidos, especialmente com doenças cognitivas como Alzheimer.
           </p>
         </div>
@@ -46,7 +50,7 @@ export default function About() {
 
       {/* Missão */}
       <section className="container mx-auto px-4 py-12 max-w-4xl">
-        <div className="bg-white rounded-2xl shadow-lg p-8 md:p-12 border border-primary/20">
+        <div className="bg-card rounded-2xl border border-border shadow-lg p-8 md:p-12">
           <h2 className="text-2xl font-bold text-dark mb-4">Nossa missão</h2>
           <p className="text-dark text-lg leading-relaxed mb-4">
             O Sagasu nasceu da necessidade de unir tecnologia e solidariedade. Permitimos que familiares, voluntários, autoridades e a comunidade trabalhem juntos para encontrar pessoas desaparecidas de forma rápida, organizada e humana.
@@ -64,7 +68,7 @@ export default function About() {
           {values.map(({ icon: Icon, title, description }) => (
             <div
               key={title}
-              className="bg-white rounded-xl shadow-md p-6 flex gap-4 hover:shadow-lg transition-shadow border border-primary/10"
+              className="flex gap-4 rounded-xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md"
             >
               <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-primary/30 flex items-center justify-center text-dark">
                 <Icon className="w-6 h-6" />
@@ -86,7 +90,7 @@ export default function About() {
             {steps.map(({ step, title, text }) => (
               <div
                 key={step}
-                className="flex gap-4 bg-white rounded-xl p-5 shadow-md border-l-4 border-primary"
+                className="flex gap-4 rounded-xl border-l-4 border-primary bg-card p-5 shadow-sm"
               >
                 <span className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-dark font-bold flex items-center justify-center">
                   {step}

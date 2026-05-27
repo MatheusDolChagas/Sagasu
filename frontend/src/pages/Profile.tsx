@@ -1,11 +1,24 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
+import axios from 'axios';
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const msg = err.response?.data?.message;
+    if (typeof msg === 'string' && msg.trim()) return msg;
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return fallback;
+}
 import { toast } from 'react-hot-toast';
 import { Case, Group } from '../types';
 import CaseCard from '../components/CaseCard';
 import { format } from 'date-fns';
+import { HiUserGroup, HiChevronRight } from 'react-icons/hi2';
+import { isSupabaseConfigured, uploadProfileAvatar } from '../lib/supabase';
+import { isValidEmail, normalizeEmail } from '../lib/validateEmail';
 
 interface CaseWithUser extends Case {
   user?: {
@@ -29,6 +42,8 @@ interface GroupWithDetails extends Group {
 export default function Profile() {
   const navigate = useNavigate();
   const { user, login, token } = useAuthStore();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -92,12 +107,55 @@ export default function Profile() {
     }
   };
 
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user || !token) return;
+    if (!isSupabaseConfigured()) {
+      toast.error('Configure o Supabase para enviar foto de perfil.');
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error('Imagem até 3 MB');
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const avatarUrl = await uploadProfileAvatar(user.id, file);
+      const v = await api.post('/media/validate', {
+        imageUrl: avatarUrl,
+        context: 'avatar',
+      });
+      if (!v.data?.success) {
+        toast.error(v.data?.message || 'Foto não passou na validação automática.');
+        return;
+      }
+      const response = await api.put('/auth/profile', { avatarUrl });
+      if (response.data.success) {
+        const updatedUser = { ...user, ...response.data.data.user };
+        login(updatedUser, token);
+        toast.success('Foto de perfil atualizada');
+      }
+    } catch (err: unknown) {
+      toast.error(apiErrorMessage(err, 'Não foi possível atualizar a foto de perfil.'));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidEmail(formData.email)) {
+      toast.error('Email inválido');
+      return;
+    }
     setIsLoading(true);
 
     try {
-      const response = await api.put('/auth/profile', formData);
+      const response = await api.put('/auth/profile', {
+        ...formData,
+        email: normalizeEmail(formData.email),
+      });
       if (response.data.success) {
         // Atualizar store com novos dados
         const updatedUser = {
@@ -127,20 +185,52 @@ export default function Profile() {
       <h1 className="text-3xl font-bold mb-6 text-dark">Meu Perfil</h1>
 
       {/* Seção de Dados do Usuário */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-semibold text-dark">Dados Pessoais</h2>
-          {!isEditing && (
+      <div className="mb-8 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="mb-6 flex flex-col gap-6 sm:flex-row sm:items-start">
+          <div className="flex flex-col items-center sm:items-start">
+            <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-border bg-muted-bg shadow-sm">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center font-display text-3xl font-bold text-muted">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
             <button
-              onClick={() => setIsEditing(true)}
-              className="bg-primary text-white px-4 py-2 rounded-lg hover:opacity-90"
+              type="button"
+              disabled={avatarBusy}
+              onClick={() => avatarInputRef.current?.click()}
+              className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-fg ring-1 ring-primary/30 hover:opacity-95 disabled:opacity-50"
             >
-              Editar
+              {avatarBusy ? 'Enviando…' : 'Alterar foto'}
             </button>
-          )}
-        </div>
+            <p className="mt-1 max-w-[230px] text-center text-[11px] text-muted sm:text-left">
+              Use uma foto nítida do seu rosto para facilitar identificação no perfil.
+            </p>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <h2 className="text-2xl font-semibold text-dark">Dados pessoais</h2>
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-fg ring-1 ring-primary/30 hover:opacity-90"
+                >
+                  Editar
+                </button>
+              )}
+            </div>
 
-        {isEditing ? (
+            {isEditing ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-dark mb-1">
@@ -187,7 +277,7 @@ export default function Profile() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="bg-primary text-white px-6 py-2 rounded-lg hover:opacity-90 disabled:opacity-50"
+                className="rounded-lg bg-primary px-6 py-2 font-semibold text-primary-fg ring-1 ring-primary/30 hover:opacity-90 disabled:opacity-50"
               >
                 {isLoading ? 'Salvando...' : 'Salvar'}
               </button>
@@ -201,7 +291,7 @@ export default function Profile() {
                     phone: user.phone || '',
                   });
                 }}
-                className="px-6 py-2 border border-dark rounded-lg hover:bg-background"
+                className="rounded-lg border border-border px-6 py-2 font-medium text-dark hover:bg-muted-bg/80"
               >
                 Cancelar
               </button>
@@ -223,23 +313,30 @@ export default function Profile() {
                 <p className="text-lg text-dark">{user.phone}</p>
               </div>
             )}
-            <div>
-              <p className="text-sm font-medium text-dark opacity-75">Tipo de Conta</p>
-              <p className="text-lg text-dark">{user.role}</p>
-            </div>
+            {user.role === 'ADMIN' ? (
+              <div>
+                <p className="text-sm font-medium text-dark opacity-75">Perfil</p>
+                <span className="inline-flex items-center rounded-full bg-primary/20 px-3 py-1 text-sm font-semibold text-dark ring-1 ring-primary/35">
+                  Administrador
+                </span>
+              </div>
+            ) : null}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Seção de Casos */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-semibold text-dark">Meus Casos</h2>
+      <div className="mb-8 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <h2 className="text-2xl font-semibold text-dark">Meus casos</h2>
           <button
+            type="button"
             onClick={() => navigate('/cases/create')}
-            className="bg-primary text-white px-4 py-2 rounded-lg hover:opacity-90"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-fg ring-1 ring-primary/30 hover:opacity-90"
           >
-            Criar Novo Caso
+            Criar novo caso
           </button>
         </div>
 
@@ -255,59 +352,85 @@ export default function Profile() {
           <div className="text-center py-8">
             <p className="text-dark mb-4">Você ainda não criou nenhum caso.</p>
             <button
+              type="button"
               onClick={() => navigate('/cases/create')}
-              className="bg-primary text-white px-6 py-3 rounded-lg hover:opacity-90"
+              className="rounded-lg bg-primary px-6 py-3 font-semibold text-primary-fg ring-1 ring-primary/30 hover:opacity-90"
             >
-              Criar Primeiro Caso
+              Criar primeiro caso
             </button>
           </div>
         )}
       </div>
 
-      {/* Seção de Grupos */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-2xl font-semibold text-dark mb-6">Grupos que Participo</h2>
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <h2 className="mb-6 text-2xl font-semibold text-dark">Grupos que participo</h2>
 
         {isLoadingData ? (
           <p className="text-dark">Carregando grupos...</p>
         ) : groups.length > 0 ? (
-          <div className="space-y-4">
-            {groups.map((group) => (
-              <div key={group.id} className="border border-dark/20 rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-dark mb-2">{group.name}</h3>
-                    {group.description && (
-                      <p className="text-dark mb-3">{group.description}</p>
-                    )}
-                    {group.case && (
-                      <p className="text-sm text-dark opacity-75 mb-1">
-                        <strong>Caso:</strong> {group.case.title}
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {groups.map((group) => {
+              const myMembership = group.members?.find((m) => m.user?.id === user.id);
+              const joinedAt = myMembership?.joinedAt ?? group.createdAt;
+              return (
+                <li key={group.id}>
+                  <Link
+                    to={`/groups/${group.id}`}
+                    className="group flex h-full flex-col rounded-2xl border border-border bg-gradient-to-br from-card to-muted-bg/30 p-5 shadow-sm transition-all hover:border-primary/40 hover:shadow-md"
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 text-primary">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/20">
+                          <HiUserGroup className="h-5 w-5" aria-hidden />
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            group.isActive
+                              ? 'bg-accent/25 text-accent-fg ring-1 ring-accent/30'
+                              : 'bg-muted-bg text-muted'
+                          }`}
+                        >
+                          {group.isActive ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </div>
+                      <HiChevronRight
+                        className="h-5 w-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+                        aria-hidden
+                      />
+                    </div>
+                    <h3 className="font-display text-lg font-semibold text-dark group-hover:text-primary">
+                      {group.name}
+                    </h3>
+                    {group.description ? (
+                      <p className="mt-1 line-clamp-2 text-sm text-muted">{group.description}</p>
+                    ) : null}
+                    {group.case ? (
+                      <p className="mt-3 text-xs text-dark">
+                        <span className="font-semibold">Caso:</span> {group.case.title}
                       </p>
-                    )}
-                    {group.leader && (
-                      <p className="text-sm text-dark opacity-75 mb-1">
-                        <strong>Líder:</strong> {group.leader.name}
+                    ) : null}
+                    {group.leader ? (
+                      <p className="mt-1 text-xs text-muted">
+                        <span className="font-medium text-dark">Líder:</span> {group.leader.name}
                       </p>
-                    )}
-                    <p className="text-xs text-dark opacity-60">
-                      Entrou em: {format(new Date(group.createdAt), "dd/MM/yyyy")}
+                    ) : null}
+                    <p className="mt-auto pt-3 text-[11px] text-muted">
+                      Desde {format(new Date(joinedAt), 'dd/MM/yyyy')}
                     </p>
-                  </div>
-                  <span className={`px-3 py-1 rounded text-sm ${
-                    group.isActive 
-                      ? 'bg-primary text-white' 
-                      : 'bg-dark/10 text-dark'
-                  }`}>
-                    {group.isActive ? 'Ativo' : 'Inativo'}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
-          <div className="text-center py-8">
+          <div className="py-8 text-center">
             <p className="text-dark">Você ainda não participa de nenhum grupo.</p>
+            <Link
+              to="/groups"
+              className="mt-3 inline-block text-sm font-semibold text-primary hover:underline"
+            >
+              Explorar grupos
+            </Link>
           </div>
         )}
       </div>

@@ -72,7 +72,7 @@ export default function MyCases() {
         <h1 className="text-3xl font-bold text-dark">Meus Casos</h1>
         <Link
           to="/cases/create"
-          className="bg-primary text-white px-6 py-3 rounded-lg hover:opacity-90 font-semibold"
+          className="bg-primary text-dark px-6 py-3 rounded-xl hover:opacity-95 font-semibold ring-1 ring-primary/30"
         >
           Criar Novo Caso
         </Link>
@@ -89,11 +89,11 @@ export default function MyCases() {
           ))}
         </div>
       ) : (
-        <div className="bg-white p-6 rounded-lg shadow-md text-center">
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm text-center">
           <p className="text-dark text-lg mb-4">Você ainda não criou nenhum caso.</p>
           <Link
             to="/cases/create"
-            className="inline-block bg-primary text-white px-6 py-3 rounded-lg hover:opacity-90 font-semibold"
+            className="inline-block bg-primary text-dark px-6 py-3 rounded-xl hover:opacity-95 font-semibold ring-1 ring-primary/30"
           >
             Criar Primeiro Caso
           </Link>

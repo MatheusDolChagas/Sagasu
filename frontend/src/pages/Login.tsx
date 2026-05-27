@@ -1,11 +1,27 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../store/authStore';
+import { reconnectSocketWithAuth } from '../lib/socket';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import PasswordInput from '@/components/PasswordInput';
+import { cn } from '@/lib/utils';
+import { isValidEmail, normalizeEmail } from '@/lib/validateEmail';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuthStore();
   const [formData, setFormData] = useState({
     email: '',
@@ -14,36 +30,50 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    const st = location.state as { pendingEmailVerification?: boolean } | null;
+    if (st?.pendingEmailVerification) {
+      toast(
+        'Enviamos um link de confirmação para o seu email. Abra-o para ativar a conta antes de entrar.',
+        { duration: 6000, icon: '✉️' },
+      );
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+    if (!isValidEmail(formData.email)) {
+      setErrors({ email: 'Digite um email válido' });
+      return;
+    }
     setIsLoading(true);
 
     try {
       const response = await api.post('/auth/login', {
-        email: formData.email,
+        email: normalizeEmail(formData.email),
         password: formData.password,
       });
 
       if (response.data.success) {
-        // Atualizar store de autenticação
         login(response.data.data.user, response.data.data.token);
+        reconnectSocketWithAuth();
 
         toast.success('Login realizado com sucesso!');
         navigate('/');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      
-      if (error.response?.data?.errors) {
-        // Erros de validação do Zod
+      const err = error as { response?: { data?: { errors?: { path: string[]; message: string }[]; message?: string } } };
+      if (err.response?.data?.errors) {
         const validationErrors: Record<string, string> = {};
-        error.response.data.errors.forEach((err: any) => {
-          validationErrors[err.path[0]] = err.message;
+        err.response.data.errors.forEach((e) => {
+          validationErrors[e.path[0]] = e.message;
         });
         setErrors(validationErrors);
       } else {
-        toast.error(error.response?.data?.message || 'Erro ao fazer login. Verifique suas credenciais.');
+        toast.error(err.response?.data?.message || 'Erro ao fazer login. Verifique suas credenciais.');
       }
     } finally {
       setIsLoading(false);
@@ -51,61 +81,65 @@ export default function Login() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-md">
-      <div className="bg-white p-8 rounded-lg shadow-md">
-        <h2 className="text-3xl font-bold text-center mb-6">Entrar</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-dark mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              id="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
-                errors.email ? 'border-accent' : 'border-dark'
-              }`}
-              required
-            />
-            {errors.email && (
-              <p className="text-accent text-sm mt-1">{errors.email}</p>
-            )}
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-dark mb-1">
-              Senha
-            </label>
-            <input
-              type="password"
-              id="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
-                errors.password ? 'border-accent' : 'border-dark'
-              }`}
-              required
-            />
-            {errors.password && (
-              <p className="text-accent text-sm mt-1">{errors.password}</p>
-            )}
-          </div>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-primary text-white py-2 rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
-        <p className="mt-4 text-center text-dark">
-          Não tem uma conta?{' '}
-          <Link to="/register" className="text-primary hover:underline">
-            Cadastre-se
-          </Link>
-        </p>
-      </div>
+    <div className="container mx-auto max-w-md px-4 py-12">
+      <Card className="shadow-md">
+        <CardHeader className="text-center">
+          <CardTitle className="font-display text-3xl">Entrar</CardTitle>
+          <CardDescription>Acesse sua conta para gerenciar casos e notificações.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className={cn(errors.email && 'border-accent ring-accent/30')}
+                required
+              />
+              {errors.email ? (
+                <p className="text-sm text-accent">{errors.email}</p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <PasswordInput
+                id="password"
+                value={formData.password}
+                onChange={(password) => setFormData({ ...formData, password })}
+                className={cn(errors.password && 'border-accent ring-accent/30')}
+                required
+                autoComplete="current-password"
+              />
+              {errors.password ? (
+                <p className="text-sm text-accent">{errors.password}</p>
+              ) : null}
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Entrando...' : 'Entrar'}
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex flex-col gap-3 border-t border-border bg-muted-bg/40 py-4">
+          <p className="text-center text-sm text-dark/85">
+            Não tem uma conta?{' '}
+            <Link to="/register" className="font-semibold text-primary hover:underline">
+              Cadastre-se
+            </Link>
+          </p>
+          <p className="text-center text-sm text-dark/80">
+            Não recebeu o link?{' '}
+            <Link
+              to="/reenviar-confirmacao"
+              className="font-semibold text-primary hover:underline"
+            >
+              Reenviar confirmação
+            </Link>
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
