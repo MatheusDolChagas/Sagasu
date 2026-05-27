@@ -162,7 +162,7 @@ export default function AdminDocumentation() {
             </p>
             <h3 className="text-lg font-semibold pt-2">Checklist operacional</h3>
             <ul className="list-disc pl-5 space-y-1 text-dark/90">
-              <li>Garantir variáveis de ambiente do backend (banco, JWT, CORS, opcional OpenAI para validação de mídia).</li>
+              <li>Garantir variáveis de ambiente do backend (banco, JWT, CORS, envio de e-mail e validação de mídia).</li>
               <li>Monitorar logs de API e fila de erros de geocodificação (Nominatim — respeitar política de uso).</li>
               <li>Conceder papéis POLICE, NGO e ADMIN apenas a pessoas autorizadas (via banco ou fluxo interno da equipe).</li>
             </ul>

@@ -120,11 +120,7 @@ export default function Register() {
           <CardContent className="space-y-4">
             {pendingVerification.devLink ? (
               <div className="rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm text-dark">
-                <p className="font-semibold mb-2">
-                  {pendingVerification.emailDispatched
-                    ? 'Link alternativo (desenvolvimento):'
-                    : 'Confirme a conta por este link (email não enviado em modo teste):'}
-                </p>
+                <p className="font-semibold mb-2">Link para confirmar a conta:</p>
                 <a
                   href={pendingVerification.devLink}
                   className="break-all text-primary font-medium hover:underline"

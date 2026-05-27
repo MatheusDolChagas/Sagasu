@@ -4,8 +4,9 @@ import { AppError } from '../utils/errors';
 import { z } from 'zod';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { validateImageUrlForPlatform } from '../services/mediaValidation.service';
+import { attachCaseClosureFields } from '../utils/caseClosure';
+import { notifyGroupMembersChanged } from '../services/groupRealtime.service';
 
-// Schema de validação para criar caso
 const createCaseSchema = z.object({
   title: z.string().min(3, 'Título deve ter pelo menos 3 caracteres'),
   description: z.string().min(10, 'Descrição deve ter pelo menos 10 caracteres'),
@@ -16,7 +17,6 @@ const createCaseSchema = z.object({
   lastSeenLatitude: z.number().gte(-90).lte(90).optional(),
   lastSeenLongitude: z.number().gte(-180).lte(180).optional(),
   lastSeenDate: z.string().optional(),
-  /** URL pública da foto (ex.: Supabase Storage), associada como mídia IMAGE */
   photoUrl: z.string().url('URL da foto inválida').optional(),
 });
 
@@ -37,16 +37,31 @@ const updateCaseSchema = z.object({
   lastSeenDate: z.string().optional().nullable(),
 });
 
+const closeCaseSchema = z.discriminatedUnion('outcome', [
+  z.object({
+    outcome: z.literal('FOUND'),
+    closureDetails: z
+      .string()
+      .trim()
+      .min(10, 'Descreva como a pessoa foi encontrada (mínimo 10 caracteres)'),
+  }),
+  z.object({
+    outcome: z.literal('CANCELLED'),
+    cancellationReason: z
+      .string()
+      .trim()
+      .min(10, 'Informe o motivo do cancelamento (mínimo 10 caracteres)'),
+  }),
+]);
+
 export const createCase = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.userId) {
       throw new AppError('Usuário não autenticado', 401);
     }
 
-    // Validar dados
     const validatedData = createCaseSchema.parse(req.body);
 
-    // Converter lastSeenDate se fornecido
     let lastSeenDate: Date | undefined;
     if (validatedData.lastSeenDate) {
       lastSeenDate = new Date(validatedData.lastSeenDate);
@@ -68,7 +83,6 @@ export const createCase = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Criar caso
     const newCase = await prisma.case.create({
       data: {
         title: validatedData.title,
@@ -204,9 +218,11 @@ export const getCaseById = async (req: Request, res: Response) => {
       throw new AppError('Caso não encontrado', 404);
     }
 
+    const data = await attachCaseClosureFields(caseItem);
+
     res.json({
       success: true,
-      data: caseItem,
+      data,
     });
   } catch (error: any) {
     if (error instanceof AppError) {
@@ -224,7 +240,6 @@ export const getCaseById = async (req: Request, res: Response) => {
   }
 };
 
-/** Linha do tempo: dicas, voluntários e avistamentos (ordenado por data). */
 export const getCaseFeed = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -340,9 +355,11 @@ export const getMyCases = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    const data = await Promise.all(cases.map((c) => attachCaseClosureFields(c)));
+
     res.json({
       success: true,
-      data: cases,
+      data,
     });
   } catch (error: any) {
     if (error instanceof AppError) {
@@ -457,7 +474,131 @@ export const updateCase = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/** Pacote para encaminhar a autoridades (dono do caso ou perfil POLICE/ADMIN) */
+export const closeCase = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.userId) {
+      throw new AppError('Usuário não autenticado', 401);
+    }
+
+    const { id } = req.params;
+    const validated = closeCaseSchema.parse(req.body);
+
+    const existing = await prisma.case.findUnique({
+      where: { id },
+      select: { id: true, userId: true, status: true },
+    });
+
+    if (!existing) {
+      throw new AppError('Caso não encontrado', 404);
+    }
+
+    if (existing.userId !== req.userId) {
+      throw new AppError('Somente o responsável pelo caso pode finalizá-lo', 403);
+    }
+
+    if (existing.status !== 'ACTIVE') {
+      throw new AppError('Este caso já foi finalizado', 400);
+    }
+
+    const now = new Date();
+
+    // Raw SQL evita falha quando o Prisma Client ainda não foi regenerado após a migração.
+    if (validated.outcome === 'FOUND') {
+      await prisma.$executeRaw`
+        UPDATE "cases"
+        SET
+          "status" = 'FOUND'::"CaseStatus",
+          "closureDetails" = ${validated.closureDetails},
+          "cancellationReason" = NULL,
+          "closedAt" = ${now}
+        WHERE "id" = ${id}
+      `;
+    } else {
+      await prisma.$executeRaw`
+        UPDATE "cases"
+        SET
+          "status" = 'CLOSED'::"CaseStatus",
+          "cancellationReason" = ${validated.cancellationReason},
+          "closureDetails" = NULL,
+          "closedAt" = ${now}
+        WHERE "id" = ${id}
+      `;
+    }
+
+    const updated = await prisma.case.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+        media: true,
+      },
+    });
+
+    if (!updated) {
+      throw new AppError('Caso não encontrado após atualização', 404);
+    }
+
+    const publicSearchGroups = await prisma.group.findMany({
+      where: { caseId: id, isPrivate: false },
+      select: { id: true },
+    });
+
+    if (publicSearchGroups.length > 0) {
+      await prisma.group.updateMany({
+        where: { caseId: id, isPrivate: false },
+        data: { isActive: false },
+      });
+      await Promise.all(
+        publicSearchGroups.map((g) => notifyGroupMembersChanged(g.id)),
+      );
+    }
+
+    const data = await attachCaseClosureFields(updated);
+
+    res.json({
+      success: true,
+      message:
+        validated.outcome === 'FOUND'
+          ? 'Caso marcado como pessoa encontrada'
+          : 'Caso cancelado',
+      data,
+    });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dados inválidos',
+        errors: error.errors,
+      });
+    }
+
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    console.error('Close case error:', error);
+    const detail =
+      error instanceof Error ? error.message : 'Erro desconhecido';
+    const isSchemaOutdated =
+      detail.includes('closureDetails') ||
+      detail.includes('cancellationReason') ||
+      detail.includes('closedAt') ||
+      detail.includes('does not exist');
+
+    res.status(500).json({
+      success: false,
+      message: isSchemaOutdated
+        ? 'Banco desatualizado: execute a migração Prisma e reinicie o backend.'
+        : 'Erro ao finalizar caso',
+      ...(process.env.NODE_ENV === 'development' && { detail }),
+    });
+  }
+};
+
 export const exportCaseForAuthorities = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.userId) {

@@ -1,15 +1,3 @@
-/**
- * Validação de imagens (tipo/tamanho + OpenAI: moderação e visão).
- *
- * Variáveis de ambiente:
- * - OPENAI_API_KEY — obrigatório para validação por IA
- * - OPENAI_VISION_MODEL — padrão gpt-4o-mini
- * - OPENAI_MODERATION_MODEL — padrão omni-moderation-latest
- * - MEDIA_NSFW_THRESHOLD — score sexual para bloquear (0–1, padrão 0.82)
- * - MEDIA_AVATAR_PERSON_THRESHOLD — confiança mínima de pessoa no avatar (padrão 0.5)
- * - MEDIA_AVATAR_RELAXED — true força validação básica se IA falhar; em dev é padrão
- */
-
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 60_000;
 const OPENAI_TIMEOUT_MS = 90_000;
@@ -83,7 +71,6 @@ function getOpenAiApiKey(): string | null {
   return key || null;
 }
 
-/** Mensagens técnicas → texto para o usuário. */
 export function humanizeMediaValidationError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes('aborted') || m.includes('abort')) {
@@ -210,20 +197,9 @@ async function moderateImageWithOpenAI(
 
 function visionPrompt(context: MediaValidationContext): string {
   if (context === 'avatar') {
-    return `Você valida fotos de perfil para uma plataforma brasileira de busca de idosos desaparecidos.
-Analise a imagem e responda em JSON:
-- acceptable: true somente se for adequada (sem nudez, violência gráfica, conteúdo sexual ou ofensivo) E houver pessoa humana
-- contains_person: true APENAS se houver pelo menos uma pessoa humana real visível (aceite selfies, espelho, rosto parcial). Animais, objetos, memes, desenhos ou paisagens SEM pessoa = false
-- person_confidence: 0 a 1 — confiança de que há uma pessoa humana na foto (0 para animal/objeto só)
-- reason: mensagem curta em português se rejeitar (ex.: "A foto de perfil deve mostrar uma pessoa, não um animal"); omita se ok`;
+    return `Valide foto de perfil (app de busca de desaparecidos). JSON: acceptable, contains_person, person_confidence (0-1), reason (pt-BR se rejeitar). Rejeite conteúdo impróprio e imagens sem pessoa humana.`;
   }
-  return `Você valida a foto principal de um caso de pessoa desaparecida (idoso 60+) em plataforma brasileira.
-A foto deve mostrar claramente a pessoa desaparecida (rosto ou corpo reconhecível).
-Responda em JSON:
-- acceptable: true se adequada ao contexto (sem conteúdo impróprio)
-- contains_person: true se a pessoa desaparecida está visível
-- person_confidence: 0 a 1
-- reason: mensagem curta em português se rejeitar; omita se ok`;
+  return `Valide foto principal de caso (idoso 60+). JSON: acceptable, contains_person, person_confidence (0-1), reason (pt-BR se rejeitar). A pessoa desaparecida deve estar visível.`;
 }
 
 async function analyzeImageWithOpenAI(
@@ -284,7 +260,6 @@ async function analyzeImageWithOpenAI(
   };
 }
 
-/** Só com MEDIA_AVATAR_RELAXED=true — nunca em erro de API/chave inválida. */
 function isAvatarRelaxedMode(): boolean {
   return process.env.MEDIA_AVATAR_RELAXED === 'true';
 }
@@ -305,7 +280,7 @@ function isOpenAiCredentialOrConfigError(message: string): boolean {
 
 function openAiFailureReason(msg: string, context: MediaValidationContext): string {
   if (isOpenAiCredentialOrConfigError(msg)) {
-    return 'Chave da OpenAI inválida ou ausente no servidor. Corrija OPENAI_API_KEY no .env do backend e reinicie o processo.';
+    return 'Serviço de validação de imagens indisponível. Tente novamente mais tarde.';
   }
   if (context === 'avatar') {
     return 'Não foi possível validar a foto de perfil agora. Tente novamente em alguns instantes.';
@@ -323,9 +298,6 @@ function avatarRelaxedAllowed(buffer: Buffer, errorMessage: string): boolean {
   return buffer.length >= 8 * 1024;
 }
 
-/**
- * Valida URL de imagem (rede pública). Usar após upload para storage ou antes de persistir no caso/avistamento.
- */
 export async function validateImageUrlForPlatform(
   imageUrl: string,
   context: MediaValidationContext = 'general',
@@ -353,14 +325,14 @@ export async function validateImageUrlForPlatform(
   const apiKey = getOpenAiApiKey();
   if (!apiKey) {
     if (context === 'avatar' && avatarRelaxedAllowed(buffer, '')) {
-      warnings.push('OPENAI_API_KEY ausente; validação básica aplicada (MEDIA_AVATAR_RELAXED=true).');
+      warnings.push('Validação simplificada aplicada.');
       return { ok: true, mode: 'basic', warnings };
     }
     return {
       ok: false,
       mode: 'basic',
       reason:
-        'Validação automática não configurada. Defina OPENAI_API_KEY no .env do backend e reinicie o servidor.',
+        'Validação automática de imagens indisponível no momento.',
       warnings,
     };
   }
@@ -399,7 +371,7 @@ export async function validateImageUrlForPlatform(
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'falha na visão';
         if (context === 'avatar' && avatarRelaxedAllowed(buffer, msg)) {
-          warnings.push('Validação básica (modo relaxado) após falha da IA.');
+          warnings.push('Validação simplificada aplicada.');
           return { ok: true, mode: 'basic', warnings };
         }
         warnings.push(`Análise indisponível: ${msg.slice(0, 120)}`);
@@ -452,7 +424,7 @@ export async function validateImageUrlForPlatform(
 
     if (context === 'avatar' && avatarRelaxedAllowed(buffer, '')) {
       warnings.push(
-        'Pessoa não confirmada com alta confiança; foto aceita em modo relaxado (MEDIA_AVATAR_RELAXED=true).',
+        'Confiança de detecção de pessoa abaixo do limiar configurado.',
       );
       return { ok: true, mode: 'openai', nsfwScore, warnings };
     }
@@ -472,10 +444,10 @@ export async function validateImageUrlForPlatform(
     const raw = e instanceof Error ? e.message : 'falha na API OpenAI';
     const msg = humanizeMediaValidationError(raw);
     if (context === 'avatar' && avatarRelaxedAllowed(buffer, raw)) {
-      warnings.push('Validação básica após erro (modo relaxado explícito).');
+      warnings.push('Validação simplificada aplicada.');
       return { ok: true, mode: 'basic', warnings };
     }
-    warnings.push(`OpenAI: ${raw.slice(0, 120)}`);
+    warnings.push(raw.slice(0, 120));
     return {
       ok: false,
       mode: 'basic',

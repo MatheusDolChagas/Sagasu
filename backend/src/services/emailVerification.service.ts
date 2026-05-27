@@ -4,7 +4,6 @@ import { Resend } from 'resend';
 
 const VERIFICATION_TTL_MS = 1000 * 60 * 60 * 24; // 24 h
 
-/** Remetente padrão do Resend (só envia para o email da sua conta Resend em testes). */
 const RESEND_DEFAULT_FROM = 'onboarding@resend.dev';
 
 export function generateVerificationToken(): { token: string; expiresAt: Date } {
@@ -17,10 +16,6 @@ function confirmationLink(token: string): string {
   return `${base}/verify-email?token=${encodeURIComponent(token)}`;
 }
 
-/**
- * Lê EMAIL_FROM do .env sem quebrar em espaços ou <>.
- * Use EMAIL_FROM=onboarding@resend.dev ou EMAIL_FROM="Sagasu <onboarding@resend.dev>"
- */
 function getFromAddress(): string {
   const raw = process.env.EMAIL_FROM?.trim();
   if (!raw) return RESEND_DEFAULT_FROM;
@@ -80,7 +75,6 @@ async function sendViaResend(
     throw new Error(formatResendError(error.message));
   }
 
-  console.info('[email] Resend enviado:', { id: data?.id, to, from });
   return { id: data?.id };
 }
 
@@ -108,10 +102,10 @@ function formatResendError(message: unknown): string {
   if (onlyOwn) {
     const match = raw.match(/\(([^)]+)\)/);
     const allowed = match?.[1] ?? 'o email da sua conta Resend';
-    return `Em modo teste do Resend, o link só pode ser enviado para ${allowed}. Para outros emails (ex.: Gmail diferente), verifique um domínio em resend.com/domains ou cadastre-se com ${allowed}. Em desenvolvimento, use o link exibido na tela após o cadastro.`;
+    return `O provedor de email em teste só envia para ${allowed}. Verifique o domínio no painel do Resend ou use o link exibido na tela após o cadastro.`;
   }
-  if (/verify a domain/i.test(raw)) {
-    return 'Para enviar confirmação a qualquer email, verifique um domínio no Resend (resend.com/domains) e use um remetente desse domínio no EMAIL_FROM.';
+  if (/verify a domain|not verified/i.test(raw)) {
+    return 'O domínio do remetente ainda não foi verificado no Resend. Conclua a verificação DNS e tente novamente.';
   }
   return raw;
 }
@@ -174,7 +168,6 @@ export async function sendSignupVerificationEmail(
     }
   }
 
-  console.warn('[email] RESEND_API_KEY/SMTP não configurados. Link:', link);
   return { sent: false, devLink: link, channel: 'none' };
 }
 

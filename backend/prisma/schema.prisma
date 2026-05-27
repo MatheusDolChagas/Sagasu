@@ -33,9 +33,10 @@ model User {
   volunteers    Volunteer[]
   notifications Notification[]
   groups        Group[]
-  groupMembers  GroupMember[]
-  groupComments GroupComment[]
-  sightings     Sighting[]
+  groupMembers      GroupMember[]
+  groupComments     GroupComment[]
+  groupReadReceipts GroupReadReceipt[]
+  sightings         Sighting[]
 
   @@map("users")
 }
@@ -61,6 +62,9 @@ model Case {
   lastSeenDate    DateTime?
   status          CaseStatus  @default(ACTIVE)
   isVerified      Boolean     @default(false)
+  closureDetails  String?     @db.Text
+  cancellationReason String?  @db.Text
+  closedAt        DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -162,10 +166,26 @@ model Group {
   case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   leaderId    String
   leader      User     @relation(fields: [leaderId], references: [id], onDelete: Cascade)
-  members     GroupMember[]
-  comments    GroupComment[]
+  members       GroupMember[]
+  comments      GroupComment[]
+  readReceipts  GroupReadReceipt[]
+  notifications Notification[]
 
   @@map("groups")
+}
+
+// Controle de mensagens lidas por usuário em cada grupo/contato
+model GroupReadReceipt {
+  id         String   @id @default(uuid())
+  lastReadAt DateTime @default(now())
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_read_receipts")
 }
 
 // Membros do grupo
@@ -241,6 +261,8 @@ model Notification {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   caseId      String?
   case        Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  groupId     String?
+  group       Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
@@ -250,6 +272,7 @@ enum NotificationType {
   CASE_UPDATE
   VOLUNTEER_JOINED
   CASE_RESOLVED
+  GROUP_MESSAGE
   SYSTEM
 }
 

@@ -13,6 +13,8 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 import { toast } from 'react-hot-toast';
+import GroupTypeBadge from '../components/GroupTypeBadge';
+import { getGroupLabel } from '../lib/groupDisplay';
 import { Case, Group } from '../types';
 import CaseCard from '../components/CaseCard';
 import { format } from 'date-fns';
@@ -363,7 +365,10 @@ export default function Profile() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <h2 className="mb-6 text-2xl font-semibold text-dark">Grupos que participo</h2>
+        <h2 className="mb-2 text-2xl font-semibold text-dark">Grupos e contatos</h2>
+        <p className="mb-6 text-sm text-muted">
+          Grupos de busca (verde) e contatos salvos privados (azul).
+        </p>
 
         {isLoadingData ? (
           <p className="text-dark">Carregando grupos...</p>
@@ -376,7 +381,11 @@ export default function Profile() {
                 <li key={group.id}>
                   <Link
                     to={`/groups/${group.id}`}
-                    className="group flex h-full flex-col rounded-2xl border border-border bg-gradient-to-br from-card to-muted-bg/30 p-5 shadow-sm transition-all hover:border-primary/40 hover:shadow-md"
+                    className={`group flex h-full flex-col rounded-2xl border bg-gradient-to-br from-card to-muted-bg/30 p-5 shadow-sm transition-all hover:shadow-md ${
+                      group.isPrivate
+                        ? 'border-sky-500/35 hover:border-sky-500/55'
+                        : 'border-emerald-500/30 hover:border-emerald-500/50'
+                    }`}
                   >
                     <div className="mb-3 flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 text-primary">
@@ -398,8 +407,11 @@ export default function Profile() {
                         aria-hidden
                       />
                     </div>
+                    <div className="mb-2">
+                      <GroupTypeBadge isPrivate={group.isPrivate} />
+                    </div>
                     <h3 className="font-display text-lg font-semibold text-dark group-hover:text-primary">
-                      {group.name}
+                      {getGroupLabel(group, user.id)}
                     </h3>
                     {group.description ? (
                       <p className="mt-1 line-clamp-2 text-sm text-muted">{group.description}</p>

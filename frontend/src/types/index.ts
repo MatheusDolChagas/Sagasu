@@ -22,6 +22,9 @@ export interface Case {
   lastSeenDate?: string;
   status: 'ACTIVE' | 'FOUND' | 'CLOSED' | 'ARCHIVED';
   isVerified: boolean;
+  closureDetails?: string | null;
+  cancellationReason?: string | null;
+  closedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   userId: string;
@@ -54,7 +57,7 @@ export interface Volunteer {
     id: string;
     name: string;
   };
-  case?: {
+  case?: Case & {
     id: string;
     title: string;
   };
@@ -63,14 +66,20 @@ export interface Volunteer {
 export interface Group {
   id: string;
   name: string;
+  /** Nome personalizado para o usuário logado (ex.: contato privado mostra o outro participante). */
+  displayName?: string;
   description?: string;
   isActive: boolean;
+  isPrivate?: boolean;
   caseId: string;
   leaderId: string;
   createdAt: string;
   case?: {
     id: string;
     title: string;
+    status?: string;
+    userId?: string;
+    missingPersonName?: string;
   };
   leader?: {
     id: string;
@@ -85,6 +94,7 @@ export interface Group {
       avatarUrl?: string | null;
     };
   }>;
+  unreadCount?: number;
 }
 
 export interface Sighting {
@@ -113,11 +123,18 @@ export interface Notification {
   id: string;
   title: string;
   message: string;
-  type: 'TIP_RECEIVED' | 'CASE_UPDATE' | 'VOLUNTEER_JOINED' | 'CASE_RESOLVED' | 'SYSTEM';
+  type:
+    | 'TIP_RECEIVED'
+    | 'CASE_UPDATE'
+    | 'VOLUNTEER_JOINED'
+    | 'CASE_RESOLVED'
+    | 'GROUP_MESSAGE'
+    | 'SYSTEM';
   isRead: boolean;
   createdAt: string;
   userId: string;
   caseId?: string;
+  groupId?: string;
 }
 
 /** Notificação com caso (API + socket) */

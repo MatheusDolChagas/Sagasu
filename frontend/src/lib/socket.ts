@@ -2,7 +2,6 @@ import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
-/** Socket único: JWT no handshake para sala `user:{id}` (notificações). */
 export function getSocket(): Socket {
   if (!socket) {
     socket = io({
@@ -19,7 +18,6 @@ export function getSocket(): Socket {
   return socket;
 }
 
-/** Após login/logout, reconecta com token atual (salas de usuário). */
 export function reconnectSocketWithAuth(): void {
   const token = localStorage.getItem('token');
   if (!socket) {

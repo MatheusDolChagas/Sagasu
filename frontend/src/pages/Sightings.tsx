@@ -77,7 +77,10 @@ export default function Sightings() {
       try {
         const res = await api.get('/sightings');
         if (res.data.success) {
-          setList(res.data.data);
+          const rows = (res.data.data as Sighting[]).filter(
+            (s) => !s.case?.status || s.case.status === 'ACTIVE',
+          );
+          setList(rows);
         }
       } catch {
         // lista vazia

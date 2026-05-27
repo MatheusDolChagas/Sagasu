@@ -8,7 +8,6 @@ const api = axios.create({
   },
 });
 
-// Interceptor para adicionar token de autenticação
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -17,13 +16,10 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Interceptor para tratar erros
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Limpa Zustand + persist (`auth-storage`); só remover `token` deixava sessão inválida
-      // reidratada e gerava loop: /notifications → 401 → reload → mesmo token.
       useAuthStore.getState().logout();
       const path = window.location.pathname;
       const isAuthPage = /\/(login|register)\/?$/.test(path);

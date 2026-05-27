@@ -3,6 +3,8 @@ import prisma from '../config/database';
 import { AppError } from '../utils/errors';
 import { z } from 'zod';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { attachCaseClosureFields } from '../utils/caseClosure';
+import { notifyGroupMembersChanged } from '../services/groupRealtime.service';
 import { onVolunteerPending, onVolunteerStatusChanged } from '../services/realtime.service';
 
 const createVolunteerSchema = z.object({
@@ -232,10 +234,6 @@ export const updateVolunteerStatus = async (req: AuthRequest, res: Response) => 
     // (visível somente ao dono via listagem) para troca de informações.
     if (validated.status === 'APPROVED') {
       const ownerId = volunteer.case.userId;
-      const volunteerUser = await prisma.user.findUnique({
-        where: { id: volunteer.userId },
-        select: { name: true },
-      });
 
       const existingPrivateGroup = await prisma.group.findFirst({
         where: {
@@ -251,11 +249,14 @@ export const updateVolunteerStatus = async (req: AuthRequest, res: Response) => 
         select: { id: true },
       });
 
+      let contactGroupId: string | null = null;
+
       if (!existingPrivateGroup) {
-        await prisma.group.create({
+        const createdContactGroup = await prisma.group.create({
           data: {
-            name: `Contato - ${volunteerUser?.name ?? 'Voluntário'}`,
-            description: null,
+            name: 'Contato privado',
+            description:
+              'Canal privado entre o responsável pelo caso e o voluntário aprovado.',
             isActive: true,
             isPrivate: true,
             caseId: volunteer.caseId,
@@ -268,7 +269,9 @@ export const updateVolunteerStatus = async (req: AuthRequest, res: Response) => 
             },
           },
         });
+        contactGroupId = createdContactGroup.id;
       } else {
+        contactGroupId = existingPrivateGroup.id;
         await prisma.groupMember.upsert({
           where: {
             groupId_userId: {
@@ -285,24 +288,8 @@ export const updateVolunteerStatus = async (req: AuthRequest, res: Response) => 
         });
       }
 
-      // Garante que esse voluntário não apareça nos grupos "públicos" do caso,
-      // preservando a regra de visibilidade/privacidade.
-      const publicGroups = await prisma.group.findMany({
-        where: {
-          caseId: volunteer.caseId,
-          isPrivate: false,
-        },
-        select: { id: true },
-      });
-
-      if (publicGroups.length > 0) {
-        await prisma.groupMember.deleteMany({
-          where: {
-            groupId: { in: publicGroups.map((g) => g.id) },
-            userId: volunteer.userId,
-            role: { not: 'LEADER' },
-          },
-        });
+      if (contactGroupId) {
+        await notifyGroupMembersChanged(contactGroupId);
       }
     }
 
@@ -344,6 +331,9 @@ export const updateVolunteerStatus = async (req: AuthRequest, res: Response) => 
             where: { id: { in: toDelete } },
           });
         }
+
+        const stillActive = remaining.filter((g) => g.count > 1).map((g) => g.id);
+        await Promise.all(stillActive.map((gid) => notifyGroupMembersChanged(gid)));
       }
     }
 
@@ -420,6 +410,17 @@ export const getMyVolunteers = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             title: true,
+            description: true,
+            missingPersonName: true,
+            age: true,
+            gender: true,
+            lastSeenLocation: true,
+            lastSeenDate: true,
+            status: true,
+            isVerified: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
           },
         },
       },
@@ -428,9 +429,16 @@ export const getMyVolunteers = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    const data = await Promise.all(
+      volunteers.map(async (v) => ({
+        ...v,
+        case: v.case ? await attachCaseClosureFields(v.case) : null,
+      })),
+    );
+
     res.json({
       success: true,
-      data: volunteers,
+      data,
     });
   } catch (error: any) {
     if (error instanceof AppError) {

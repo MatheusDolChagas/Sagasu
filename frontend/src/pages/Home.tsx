@@ -113,8 +113,12 @@ export default function Home() {
       <Card className="mb-12 border-border shadow-sm">
         <CardHeader className="space-y-6 pb-8 pt-10 text-center md:pt-12">
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Badge variant="secondary">Rede colaborativa</Badge>
-            <Badge variant="outline">Idosos desaparecidos</Badge>
+            <Badge className="border-primary/40 bg-primary/15 text-primary dark:bg-primary/25 dark:text-primary dark:border-primary/50">
+              Rede colaborativa
+            </Badge>
+            <Badge variant="outline" className="dark:border-border dark:bg-card dark:text-dark">
+              Idosos desaparecidos
+            </Badge>
           </div>
           <div className="space-y-4">
             <CardTitle className="font-display text-4xl font-bold tracking-tight text-dark md:text-5xl">

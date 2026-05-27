@@ -1,6 +1,7 @@
 import type { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import prisma from './config/database';
 
 let io: Server | null = null;
 
@@ -43,6 +44,38 @@ export function initSocket(httpServer: HttpServer): Server {
         socket.leave(`case:${caseId}`);
       }
     });
+
+    socket.on('group:subscribe', async (groupId: string) => {
+      if (!groupId || typeof groupId !== 'string' || !socket.data.userId) return;
+      try {
+        const group = await prisma.group.findUnique({
+          where: { id: groupId },
+          select: {
+            leaderId: true,
+            isPrivate: true,
+            case: { select: { userId: true } },
+            members: { select: { userId: true } },
+          },
+        });
+        if (!group) return;
+        const userId = socket.data.userId as string;
+        const isCaseOwner = group.case.userId === userId;
+        const isMember =
+          group.leaderId === userId ||
+          group.members.some((m) => m.userId === userId);
+        if (isMember || isCaseOwner || !group.isPrivate) {
+          socket.join(`group:${groupId}`);
+        }
+      } catch {
+        // ignore
+      }
+    });
+
+    socket.on('group:unsubscribe', (groupId: string) => {
+      if (groupId && typeof groupId === 'string') {
+        socket.leave(`group:${groupId}`);
+      }
+    });
   });
 
   return io;
@@ -66,6 +99,22 @@ export function emitToUser(userId: string, event: string, payload: unknown): voi
 export function emitCaseFeed(caseId: string, payload: unknown): void {
   try {
     getIO().to(`case:${caseId}`).emit('case:feed', payload);
+  } catch {
+    // ignore
+  }
+}
+
+export function emitGroupMessage(groupId: string, payload: unknown): void {
+  try {
+    getIO().to(`group:${groupId}`).emit('group:message', payload);
+  } catch {
+    // ignore
+  }
+}
+
+export function emitGroupMembers(groupId: string, payload: unknown): void {
+  try {
+    getIO().to(`group:${groupId}`).emit('group:members', payload);
   } catch {
     // ignore
   }

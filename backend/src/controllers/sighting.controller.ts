@@ -112,6 +112,9 @@ export const createSighting = async (req: AuthRequest, res: Response) => {
 export const getSightings = async (_req: Request, res: Response) => {
   try {
     const list = await prisma.sighting.findMany({
+      where: {
+        case: { status: 'ACTIVE' },
+      },
       include: {
         case: {
           select: {

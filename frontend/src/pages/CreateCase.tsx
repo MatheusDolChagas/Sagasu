@@ -28,6 +28,10 @@ export default function CreateCase() {
     lastSeenLocation: '',
     lastSeenDate: '',
   });
+  const [lastSeenCoords, setLastSeenCoords] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -112,6 +116,26 @@ export default function CreateCase() {
       }
       if (formData.lastSeenLocation) {
         payload.lastSeenLocation = formData.lastSeenLocation;
+      }
+      let coords = lastSeenCoords;
+      if (formData.lastSeenLocation && !coords) {
+        try {
+          const geo = await api.get('/map/geocode', {
+            params: { q: formData.lastSeenLocation, city: 'Belo Horizonte' },
+          });
+          if (geo.data?.success && geo.data.data?.latitude != null && geo.data.data?.longitude != null) {
+            coords = {
+              latitude: geo.data.data.latitude,
+              longitude: geo.data.data.longitude,
+            };
+          }
+        } catch {
+          // mapa ficará sem marcador se geocodificação falhar
+        }
+      }
+      if (coords) {
+        payload.lastSeenLatitude = coords.latitude;
+        payload.lastSeenLongitude = coords.longitude;
       }
       if (formData.lastSeenDate) {
         payload.lastSeenDate = formData.lastSeenDate;
@@ -310,10 +334,20 @@ export default function CreateCase() {
             <AddressSuggestField
               id="lastSeenLocation"
               value={formData.lastSeenLocation}
-              onChange={(v) => setFormData({ ...formData, lastSeenLocation: v })}
+              onChange={(v) => {
+                setFormData({ ...formData, lastSeenLocation: v });
+                setLastSeenCoords(null);
+              }}
+              onSelect={(s) => {
+                setFormData({ ...formData, lastSeenLocation: s.label });
+                setLastSeenCoords({ latitude: s.latitude, longitude: s.longitude });
+              }}
               cityHint="Belo Horizonte"
               placeholder="Ex.: Rua Progresso, 1389 — Savassi"
             />
+            <p className="mt-1 text-xs text-muted">
+              Selecione um endereço na lista para o caso aparecer no mapa.
+            </p>
           </div>
 
           <div>

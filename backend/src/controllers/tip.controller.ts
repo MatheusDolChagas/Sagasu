@@ -19,11 +19,15 @@ export const createTip = async (req: AuthRequest | Request, res: Response) => {
 
     const existingCase = await prisma.case.findUnique({
       where: { id: caseId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
 
     if (!existingCase) {
       throw new AppError('Caso não encontrado', 404);
+    }
+
+    if (existingCase.status !== 'ACTIVE') {
+      throw new AppError('Este caso foi finalizado e não aceita novas dicas', 400);
     }
 
     const validatedData = createTipSchema.parse(req.body);

@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../config/database';
 
-/** ~0,12° ≈ 13 km (latitude); agrega ocorrências para mapa de calor regional */
 const HEAT_GRID_STEP_DEG = 0.12;
 
 function heatBucket(lat: number, lng: number) {
@@ -11,7 +10,6 @@ function heatBucket(lat: number, lng: number) {
   return { latitude, longitude, key: `${latitude.toFixed(4)}:${longitude.toFixed(4)}` };
 }
 
-/** Marcadores públicos para o mapa: casos com coordenadas, dicas com coordenadas, avistamentos */
 export const getMapMarkers = async (req: Request, res: Response) => {
   try {
     const [cases, tips, sightings] = await Promise.all([
@@ -111,7 +109,6 @@ export const getMapMarkers = async (req: Request, res: Response) => {
   }
 };
 
-/** Agregação por célula geográfica para mapa de calor (casos + dicas + avistamentos). */
 export const getMapHeatmap = async (_req: Request, res: Response) => {
   try {
     const [cases, tips, sightings] = await Promise.all([
@@ -238,7 +235,6 @@ function hasRegionHint(q: string): boolean {
   );
 }
 
-/** Gera variações (com/sem vírgula, com cidade) para achar ruas brasileiras. */
 function buildSearchQueries(q: string, cityHint?: string): string[] {
   const trimmed = q.trim();
   const compact = trimmed.replace(/,\s*/g, ' ').replace(/\s+/g, ' ');
@@ -297,7 +293,6 @@ function dedupeHits(hits: GeocodeHit[], limit: number): GeocodeHit[] {
   return out;
 }
 
-/** Prioriza resultados no Brasil (evita homônimos como Praça da Liberdade em Portugal). */
 function nominatimSearchUrl(query: string, limit: number, bias?: GeocodeBias): string {
   const url = new URL('https://nominatim.openstreetmap.org/search');
   url.searchParams.set('format', 'json');
@@ -416,7 +411,6 @@ async function fetchGeocodingWithFallback(
   return dedupeHits(merged, limit);
 }
 
-/** Lista sugestões enquanto o usuário digita (apenas Brasil). */
 export const geocodeSuggest = async (req: Request, res: Response) => {
   try {
     const { q, city } = geocodeQuerySchema.parse(req.query);
@@ -446,7 +440,6 @@ export const geocodeSuggest = async (req: Request, res: Response) => {
   }
 };
 
-/** Proxy Nominatim (evita CORS no browser; respeitar política de uso em produção). */
 export const geocodeAddress = async (req: Request, res: Response) => {
   try {
     const { q, city } = geocodeQuerySchema.parse(req.query);

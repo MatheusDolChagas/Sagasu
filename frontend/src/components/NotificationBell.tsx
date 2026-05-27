@@ -88,7 +88,7 @@ export default function NotificationBell() {
         >
           <HiBell className="w-5 h-5" />
           {unread > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-dark text-[10px] font-bold flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-600 text-white text-[11px] leading-none font-extrabold flex items-center justify-center ring-2 ring-card shadow-sm">
               {unread > 99 ? '99+' : unread}
             </span>
           )}
@@ -96,7 +96,14 @@ export default function NotificationBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 max-h-[min(70vh,420px)] overflow-y-auto">
         <div className="px-2 py-1.5 flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-dark">Notificações</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-dark">Notificações</p>
+            {unread > 0 && (
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold text-white">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
+          </div>
           {unread > 0 && (
             <button
               type="button"
@@ -133,15 +140,26 @@ export default function NotificationBell() {
                 )}
               </div>
               <p className="text-xs text-dark/70 line-clamp-3">{n.message}</p>
-              {n.caseId && (
-                <Link
-                  to={`/cases/${n.caseId}`}
-                  className="text-xs text-primary font-medium hover:underline mt-1"
-                  onClick={() => setOpen(false)}
-                >
-                  Ver caso
-                </Link>
-              )}
+              <div className="flex flex-wrap gap-3 mt-1">
+                {n.groupId && (
+                  <Link
+                    to={`/groups/${n.groupId}`}
+                    className="text-xs text-primary font-medium hover:underline"
+                    onClick={() => setOpen(false)}
+                  >
+                    Abrir conversa
+                  </Link>
+                )}
+                {n.caseId && (
+                  <Link
+                    to={`/cases/${n.caseId}`}
+                    className="text-xs text-primary font-medium hover:underline"
+                    onClick={() => setOpen(false)}
+                  >
+                    Ver caso
+                  </Link>
+                )}
+              </div>
             </DropdownMenuItem>
           ))
         )}

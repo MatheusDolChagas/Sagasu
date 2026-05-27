@@ -22,7 +22,6 @@ async function createAndEmitNotification(data: {
   return n;
 }
 
-/** Nova dica: notifica o dono do caso e atualiza o feed em tempo real. */
 export async function onTipCreated(
   caseId: string,
   tipId: string,
@@ -52,7 +51,6 @@ export async function onTipCreated(
   });
 }
 
-/** Novo pedido de voluntário (apenas quando é inscrição nova ou reabertura após rejeição). */
 export async function onVolunteerPending(
   caseId: string,
   volunteerId: string,
@@ -81,7 +79,6 @@ export async function onVolunteerPending(
   });
 }
 
-/** Dono alterou status do voluntário — notifica o voluntário. */
 export async function onVolunteerStatusChanged(
   caseId: string,
   volunteerUserId: string,
@@ -121,7 +118,6 @@ export async function onVolunteerStatusChanged(
   });
 }
 
-/** Novo avistamento com foto. */
 export async function onSightingCreated(
   caseId: string,
   sightingId: string,

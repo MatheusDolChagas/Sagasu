@@ -21,6 +21,7 @@ import type { Case, Tip, Sighting } from '../types';
 import ShareBar from '../components/ShareBar';
 import CaseFeed from '../components/CaseFeed';
 import AddressSuggestField from '../components/AddressSuggestField';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface CaseWithRelations extends Case {
   user?: {
@@ -38,8 +39,8 @@ interface CaseWithRelations extends Case {
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Ativo',
-  FOUND: 'Encontrado',
-  CLOSED: 'Encerrado',
+  FOUND: 'Pessoa encontrada',
+  CLOSED: 'Caso cancelado',
   ARCHIVED: 'Arquivado',
 };
 
@@ -53,6 +54,18 @@ const STATUS_STYLES: Record<string, string> = {
   ARCHIVED: 'border border-border bg-muted-bg/50 text-dark',
 };
 
+/** Badges no hero escuro — fundo sólido e contraste alto */
+const STATUS_STYLES_ON_DARK: Record<string, string> = {
+  ACTIVE:
+    'border border-emerald-200 bg-emerald-400 text-emerald-950 shadow-md ring-1 ring-emerald-300/50',
+  FOUND:
+    'border border-sky-200 bg-sky-400 text-sky-950 shadow-md ring-1 ring-sky-300/50',
+  CLOSED:
+    'border border-amber-200 bg-amber-400 text-amber-950 shadow-md ring-1 ring-amber-300/50',
+  ARCHIVED:
+    'border border-zinc-200 bg-zinc-300 text-zinc-900 shadow-md ring-1 ring-zinc-400/50',
+};
+
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -64,6 +77,7 @@ export default function CaseDetail() {
   const [tipsLoading, setTipsLoading] = useState(false);
   const [tipContent, setTipContent] = useState('');
   const [tipLocation, setTipLocation] = useState('');
+  const [tipCoords, setTipCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [tipAnonymous, setTipAnonymous] = useState(true);
   const [tipSubmitting, setTipSubmitting] = useState(false);
   const [volunteerStatus, setVolunteerStatus] = useState<'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED'>('NONE');
@@ -75,6 +89,11 @@ export default function CaseDetail() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [promotingSightingId, setPromotingSightingId] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState('');
+  const [closeOutcome, setCloseOutcome] = useState<'FOUND' | 'CANCELLED'>('FOUND');
+  const [closureDetails, setClosureDetails] = useState('');
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [closeSubmitting, setCloseSubmitting] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   useEffect(() => {
     setShareUrl(typeof window !== 'undefined' ? window.location.href : '');
@@ -161,6 +180,7 @@ export default function CaseDetail() {
   };
 
   const isOwner = currentUser && caseItem && caseItem.userId === currentUser.id;
+  const isCaseActive = caseItem?.status === 'ACTIVE';
 
   const canExport =
     currentUser &&
@@ -240,7 +260,7 @@ export default function CaseDetail() {
 
   const handleSubmitTip = async (event: FormEvent) => {
     event.preventDefault();
-    if (!id || !tipContent.trim()) return;
+    if (!id || !tipContent.trim() || !isCaseActive) return;
     setTipSubmitting(true);
     try {
       const payload: Partial<Tip> & { isAnonymous: boolean } = {
@@ -248,11 +268,16 @@ export default function CaseDetail() {
         location: tipLocation.trim() || undefined,
         isAnonymous: currentUser ? tipAnonymous : true,
       };
+      if (tipCoords) {
+        payload.latitude = tipCoords.latitude;
+        payload.longitude = tipCoords.longitude;
+      }
       const res = await api.post(`/tips/case/${id}`, payload);
       if (res.data.success) {
         setTips((prev) => [res.data.data, ...prev]);
         setTipContent('');
         setTipLocation('');
+        setTipCoords(null);
         setTipAnonymous(true);
       }
     } catch {
@@ -263,8 +288,61 @@ export default function CaseDetail() {
     }
   };
 
+  const buildClosePayload = () => {
+    if (closeOutcome === 'FOUND') {
+      return { outcome: 'FOUND' as const, closureDetails: closureDetails.trim() };
+    }
+    return { outcome: 'CANCELLED' as const, cancellationReason: cancellationReason.trim() };
+  };
+
+  const validateCloseForm = (): boolean => {
+    if (closeOutcome === 'FOUND') {
+      if (closureDetails.trim().length < 10) {
+        toast.error('Descreva como a pessoa foi encontrada (mínimo 10 caracteres).');
+        return false;
+      }
+      return true;
+    }
+    if (cancellationReason.trim().length < 10) {
+      toast.error('Informe o motivo do cancelamento (mínimo 10 caracteres).');
+      return false;
+    }
+    return true;
+  };
+
+  const handleCloseFormSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!validateCloseForm()) return;
+    setCloseConfirmOpen(true);
+  };
+
+  const executeCloseCase = async () => {
+    if (!id || !isOwner || !validateCloseForm()) return;
+
+    setCloseSubmitting(true);
+    try {
+      const res = await api.post(`/cases/${id}/close`, buildClosePayload());
+      if (res.data.success) {
+        setCaseItem(res.data.data as CaseWithRelations);
+        setClosureDetails('');
+        setCancellationReason('');
+        setCloseConfirmOpen(false);
+        toast.success(res.data.message || 'Caso finalizado com sucesso.');
+      }
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : 'Não foi possível finalizar o caso.';
+      toast.error(msg || 'Não foi possível finalizar o caso.');
+    } finally {
+      setCloseSubmitting(false);
+    }
+  };
+
   const handleVolunteer = async () => {
     if (!id) return;
+    if (!isCaseActive) return;
     if (!currentUser) {
       navigate('/login');
       return;
@@ -400,19 +478,21 @@ export default function CaseDetail() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold mb-2">{caseItem.title}</h1>
-              <p className="text-primary/90 text-sm">
+              <p className="text-white/85 text-base">
                 Atualizado em {formatDate(caseItem.updatedAt)}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span
-                className={`px-3 py-1 rounded-full text-sm font-medium border ${STATUS_STYLES[caseItem.status] ?? STATUS_STYLES.ACTIVE}`}
+                className={`inline-flex items-center px-3.5 py-1.5 rounded-full text-base font-semibold border ${
+                  STATUS_STYLES_ON_DARK[caseItem.status] ?? STATUS_STYLES_ON_DARK.ACTIVE
+                }`}
               >
                 {STATUS_LABELS[caseItem.status] ?? caseItem.status}
               </span>
               {caseItem.isVerified && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary/20 text-primary rounded text-xs font-medium">
-                  <HiShieldCheck className="w-4 h-4" />
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-white/30 bg-white text-zinc-900 text-base font-semibold shadow-md">
+                  <HiShieldCheck className="w-5 h-5 text-emerald-700" aria-hidden />
                   Verificado
                 </span>
               )}
@@ -427,6 +507,10 @@ export default function CaseDetail() {
             title={caseItem.title}
             description={caseItem.description}
             url={shareUrl}
+            missingPersonName={caseItem.missingPersonName}
+            imageUrl={
+              caseItem.media?.find((m) => m.type === 'IMAGE')?.url
+            }
           />
         ) : null}
       </div>
@@ -440,6 +524,147 @@ export default function CaseDetail() {
           </h2>
           <p className="text-dark whitespace-pre-wrap">{caseItem.description}</p>
         </section>
+
+        {!isCaseActive && (
+          <section className="bg-card rounded-2xl border border-amber-500/35 shadow-sm p-6 mb-6">
+            <h2 className="text-lg font-semibold text-dark mb-2">Encerramento do caso</h2>
+            {caseItem.status === 'FOUND' && caseItem.closureDetails && (
+              <div className="text-sm text-dark/90 space-y-2">
+                <p className="font-medium text-sky-800 dark:text-sky-200">
+                  Pessoa encontrada
+                </p>
+                <p className="whitespace-pre-wrap">{caseItem.closureDetails}</p>
+              </div>
+            )}
+            {caseItem.status === 'CLOSED' && caseItem.cancellationReason && (
+              <div className="text-sm text-dark/90 space-y-2">
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  Caso cancelado
+                </p>
+                <p className="whitespace-pre-wrap">{caseItem.cancellationReason}</p>
+              </div>
+            )}
+            {caseItem.closedAt && (
+              <p className="text-xs text-dark/60 mt-3">
+                Finalizado em {formatDate(caseItem.closedAt)}
+              </p>
+            )}
+            <p className="text-xs text-dark/65 mt-3">
+              Os contatos salvos com voluntários permanecem disponíveis na página de grupos.
+            </p>
+          </section>
+        )}
+
+        {isOwner && isCaseActive && (
+          <section className="bg-card rounded-2xl border border-amber-500/40 shadow-sm p-6 mb-6">
+            <h2 className="text-lg font-semibold text-dark mb-2">Finalizar caso</h2>
+            <p className="text-sm text-dark/75 mb-4">
+              Registre como este caso foi encerrado. Grupos de busca deixam de aceitar novas entradas;
+              contatos salvos com voluntários continuam acessíveis.
+            </p>
+            <form onSubmit={handleCloseFormSubmit} className="space-y-4">
+              <div className="flex flex-wrap gap-4">
+                <label className="inline-flex items-center gap-2 text-sm text-dark cursor-pointer">
+                  <input
+                    type="radio"
+                    name="closeOutcome"
+                    checked={closeOutcome === 'FOUND'}
+                    onChange={() => setCloseOutcome('FOUND')}
+                    className="text-primary focus:ring-primary"
+                  />
+                  Pessoa encontrada
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm text-dark cursor-pointer">
+                  <input
+                    type="radio"
+                    name="closeOutcome"
+                    checked={closeOutcome === 'CANCELLED'}
+                    onChange={() => setCloseOutcome('CANCELLED')}
+                    className="text-primary focus:ring-primary"
+                  />
+                  Caso cancelado
+                </label>
+              </div>
+              {closeOutcome === 'FOUND' ? (
+                <div>
+                  <label className="block text-sm font-medium text-dark mb-1">
+                    Como a pessoa foi encontrada? *
+                  </label>
+                  <textarea
+                    value={closureDetails}
+                    onChange={(e) => setClosureDetails(e.target.value)}
+                    rows={4}
+                    required
+                    minLength={10}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="Ex.: Encontrada em casa de familiar, às 14h, com saúde estável..."
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-dark mb-1">
+                    Motivo do cancelamento *
+                  </label>
+                  <textarea
+                    value={cancellationReason}
+                    onChange={(e) => setCancellationReason(e.target.value)}
+                    rows={4}
+                    required
+                    minLength={10}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="Ex.: Informação incorreta, pessoa já havia retornado, duplicidade de caso..."
+                  />
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={closeSubmitting}
+                className="rounded-xl bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-60 dark:bg-amber-600"
+              >
+                Encerrar caso
+              </button>
+            </form>
+          </section>
+        )}
+
+        <ConfirmDialog
+          open={closeConfirmOpen}
+          title={
+            closeOutcome === 'FOUND'
+              ? 'Confirmar pessoa encontrada?'
+              : 'Confirmar cancelamento do caso?'
+          }
+          description={
+            closeOutcome === 'FOUND' ? (
+              <>
+                <p className="mb-2">
+                  O caso será marcado como <strong>pessoa encontrada</strong> e deixará de aceitar
+                  novas dicas, voluntários e entradas em grupos de busca.
+                </p>
+                <p className="text-dark/70 text-xs rounded-lg bg-muted-bg/50 border border-border p-2 whitespace-pre-wrap">
+                  {closureDetails.trim()}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mb-2">
+                  O caso será <strong>cancelado</strong>. Esta ação não pode ser desfeita pela
+                  interface. Contatos salvos com voluntários permanecem acessíveis.
+                </p>
+                <p className="text-dark/70 text-xs rounded-lg bg-muted-bg/50 border border-border p-2 whitespace-pre-wrap">
+                  {cancellationReason.trim()}
+                </p>
+              </>
+            )
+          }
+          confirmLabel={
+            closeOutcome === 'FOUND' ? 'Sim, pessoa encontrada' : 'Sim, cancelar caso'
+          }
+          variant={closeOutcome === 'CANCELLED' ? 'danger' : 'default'}
+          loading={closeSubmitting}
+          onConfirm={() => void executeCloseCase()}
+          onCancel={() => !closeSubmitting && setCloseConfirmOpen(false)}
+        />
 
         {id && <CaseFeed caseId={id} isOwner={!!isOwner} />}
 
@@ -631,6 +856,12 @@ export default function CaseDetail() {
             Você pode enviar informações de forma anônima para ajudar na localização da pessoa desaparecida.
           </p>
 
+          {!isCaseActive && (
+            <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mb-4">
+              Este caso foi finalizado. Novas dicas não podem ser enviadas.
+            </p>
+          )}
+
           <form onSubmit={handleSubmitTip} className="space-y-3 mb-6">
             <div>
               <label className="block text-sm font-medium text-dark mb-1">
@@ -643,6 +874,7 @@ export default function CaseDetail() {
                 className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="Descreva o que você viu, horário, características, etc."
                 required
+                disabled={!isCaseActive}
               />
             </div>
             <div>
@@ -651,7 +883,14 @@ export default function CaseDetail() {
               </label>
               <AddressSuggestField
                 value={tipLocation}
-                onChange={setTipLocation}
+                onChange={(v) => {
+                  setTipLocation(v);
+                  setTipCoords(null);
+                }}
+                onSelect={(s) => {
+                  setTipLocation(s.label);
+                  setTipCoords({ latitude: s.latitude, longitude: s.longitude });
+                }}
                 placeholder="Digite o endereço (ex.: Praça da Liberdade, Belo Horizonte)"
               />
             </div>
@@ -673,7 +912,7 @@ export default function CaseDetail() {
               )}
               <button
                 type="submit"
-                disabled={tipSubmitting || !tipContent.trim()}
+                disabled={!isCaseActive || tipSubmitting || !tipContent.trim()}
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
               >
                 {tipSubmitting ? 'Enviando...' : 'Enviar dica'}
@@ -786,7 +1025,11 @@ export default function CaseDetail() {
                 Inscreva-se como voluntário para participar de buscas, grupos de apoio e receber
                 atualizações sobre este caso.
               </p>
-              {!currentUser ? (
+              {!isCaseActive ? (
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  Este caso não está mais aceitando novos voluntários.
+                </p>
+              ) : !currentUser ? (
                 <Link
                   to="/login"
                   className="inline-block rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900"

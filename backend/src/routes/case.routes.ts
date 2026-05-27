@@ -6,6 +6,7 @@ import {
   getCaseFeed,
   getMyCases,
   updateCase,
+  closeCase,
   exportCaseForAuthorities,
 } from '../controllers/case.controller';
 import { authenticate, authenticateOptional } from '../middleware/auth.middleware';
@@ -18,6 +19,7 @@ router.post('/', authenticate, createCase);
 router.get('/:id/feed', authenticateOptional, getCaseFeed);
 router.get('/:id/export-authorities', authenticate, exportCaseForAuthorities);
 router.put('/:id', authenticate, updateCase);
+router.post('/:id/close', authenticate, closeCase);
 router.get('/:id', getCaseById);
 
 export default router;

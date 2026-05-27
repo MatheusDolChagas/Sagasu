@@ -85,17 +85,10 @@ export default function Materials() {
       <section className="container mx-auto px-4 py-12 max-w-4xl">
         <div className="rounded-2xl border border-border bg-card p-6 md:p-8 shadow-sm mb-10">
           <h2 className="text-xl font-bold text-dark mb-3">Sobre este espaço</h2>
-          <p className="text-dark/90 leading-relaxed mb-4">
+          <p className="text-dark/90 leading-relaxed">
             O Sagasu integra casos, mapa, avistamentos e notificações. Estes materiais reforçam boas
-            práticas de divulgação, privacidade e segurança — inclusive o uso de{' '}
-            <strong className="font-semibold text-dark">validação automática de imagens</strong> quando
-            o administrador configura serviços de visão computacional no servidor.
-          </p>
-          <p className="text-dark/80 text-sm leading-relaxed">
-            Administradores: consulte as variáveis{' '}
-            <code className="rounded bg-muted-bg px-1.5 py-0.5 text-xs">OPENAI_API_KEY</code> e{' '}
-            <code className="rounded bg-muted-bg px-1.5 py-0.5 text-xs">MEDIA_NSFW_THRESHOLD</code> no
-            backend para ativar a checagem por IA (OpenAI).
+            práticas de divulgação, privacidade e segurança — inclusive a validação automática de
+            imagens em fotos de perfil e casos, quando disponível no servidor.
           </p>
         </div>
 

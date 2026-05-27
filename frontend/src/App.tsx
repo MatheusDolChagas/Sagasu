@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { appToastOptions } from './lib/toastTheme';
 
 // Pages
 import Home from './pages/Home';
@@ -66,7 +67,7 @@ function App() {
           />
         </Routes>
       </Layout>
-      <Toaster position="top-right" />
+      <Toaster position="top-right" toastOptions={appToastOptions} />
     </Router>
   );
 }

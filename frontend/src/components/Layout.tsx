@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import Header from './Header';
 import Footer from './Footer';
+import ProfileAvatarReminder from './ProfileAvatarReminder';
 
 interface LayoutProps {
   children: ReactNode;
@@ -13,6 +14,7 @@ export default function Layout({ children }: LayoutProps) {
         Pular para o conteúdo
       </a>
       <Header />
+      <ProfileAvatarReminder />
       <main id="main-content" className="flex-grow" tabIndex={-1}>
         {children}
       </main>

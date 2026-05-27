@@ -13,7 +13,6 @@ type AddressSuggestFieldProps = {
   value: string;
   onChange: (value: string) => void;
   onSelect?: (s: AddressSuggestion) => void;
-  /** Cidade para enriquecer a busca (ex.: Belo Horizonte) quando o texto não incluir estado/cidade */
   cityHint?: string;
   placeholder?: string;
   className?: string;

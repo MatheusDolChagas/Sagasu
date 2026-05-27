@@ -2,6 +2,15 @@ import { Response } from 'express';
 import prisma from '../config/database';
 import { AppError } from '../utils/errors';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { emitGroupMessage, emitToUser } from '../socket';
+import { onGroupMessageCreated } from '../services/groupMessageNotify.service';
+import { notifyGroupMembersChanged } from '../services/groupRealtime.service';
+import { withGroupDisplayName } from '../utils/groupDisplay';
+import {
+  countUnreadByGroups,
+  countUnreadInGroup,
+  markGroupAsRead,
+} from '../utils/groupUnread';
 import { z } from 'zod';
 
 const createGroupSchema = z.object({
@@ -71,6 +80,7 @@ export const createGroup = async (req: AuthRequest, res: Response) => {
         description: validatedData.description || null,
         caseId: validatedData.caseId,
         leaderId: req.userId,
+        isPrivate: false,
         members: {
           create: {
             userId: req.userId,
@@ -83,6 +93,8 @@ export const createGroup = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             title: true,
+            status: true,
+            missingPersonName: true,
           },
         },
         leader: {
@@ -93,6 +105,8 @@ export const createGroup = async (req: AuthRequest, res: Response) => {
         },
       },
     });
+
+    await notifyGroupMembersChanged(group.id);
 
     res.status(201).json({
       success: true,
@@ -138,6 +152,9 @@ export const getGroupById = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             title: true,
+            status: true,
+            userId: true,
+            missingPersonName: true,
           },
         },
         leader: {
@@ -169,7 +186,7 @@ export const getGroupById = async (req: AuthRequest, res: Response) => {
               },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: 'asc' },
           take: 200,
         },
       },
@@ -181,13 +198,14 @@ export const getGroupById = async (req: AuthRequest, res: Response) => {
 
     const isLeader = group.leaderId === req.userId;
     const isMember = (group.members as any[]).some((m: any) => m.user?.id === req.userId);
-    if (!isLeader && !isMember) {
+    const isCaseOwner = group.case?.userId === req.userId;
+    if (!isLeader && !isMember && !isCaseOwner) {
       throw new AppError('Acesso negado', 403);
     }
 
     res.json({
       success: true,
-      data: group,
+      data: withGroupDisplayName(group, req.userId!),
     });
   } catch (error: any) {
     if (error instanceof AppError) {
@@ -257,6 +275,15 @@ export const createGroupComment = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    emitGroupMessage(groupId, comment);
+
+    const authorName =
+      (comment.user as { name?: string } | undefined)?.name ?? 'Alguém';
+    const preview =
+      content ??
+      (imageUrl ? '[imagem]' : '');
+    void onGroupMessageCreated(groupId, req.userId, authorName, preview);
+
     res.status(201).json({
       success: true,
       message: 'Comentário enviado',
@@ -321,6 +348,16 @@ export const getGroupsByCase = async (req: AuthRequest, res: Response) => {
             members: true,
           },
         },
+        members: {
+          select: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -329,7 +366,9 @@ export const getGroupsByCase = async (req: AuthRequest, res: Response) => {
 
     res.json({
       success: true,
-      data: groups,
+      data: groups.map((g) =>
+        withGroupDisplayName(g, req.userId!),
+      ),
     });
   } catch (error: any) {
     if (error instanceof AppError) {
@@ -358,7 +397,6 @@ export const getMyGroups = async (req: AuthRequest, res: Response) => {
         OR: [
           { leaderId: req.userId },
           {
-            isPrivate: false,
             members: {
               some: {
                 userId: req.userId,
@@ -372,6 +410,9 @@ export const getMyGroups = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             title: true,
+            status: true,
+            userId: true,
+            missingPersonName: true,
           },
         },
         leader: {
@@ -399,9 +440,15 @@ export const getMyGroups = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    const groupIds = groups.map((g) => g.id);
+    const unreadMap = await countUnreadByGroups(req.userId, groupIds);
+
     res.json({
       success: true,
-      data: groups,
+      data: groups.map((g) => ({
+        ...withGroupDisplayName(g, req.userId!),
+        unreadCount: unreadMap[g.id] ?? 0,
+      })),
     });
   } catch (error: any) {
     if (error instanceof AppError) {
@@ -419,6 +466,60 @@ export const getMyGroups = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const markGroupMessagesRead = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.userId) {
+      throw new AppError('Usuário não autenticado', 401);
+    }
+
+    const { id: groupId } = req.params;
+
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: {
+        leaderId: true,
+        isPrivate: true,
+        case: { select: { userId: true } },
+        members: { select: { userId: true } },
+      },
+    });
+
+    if (!group) {
+      throw new AppError('Grupo não encontrado', 404);
+    }
+
+    const isLeader = group.leaderId === req.userId;
+    const isMember = group.members.some((m) => m.userId === req.userId);
+    const isCaseOwner = group.case?.userId === req.userId;
+    if (!isLeader && !isMember && !isCaseOwner) {
+      throw new AppError('Acesso negado', 403);
+    }
+
+    await markGroupAsRead(req.userId, groupId);
+    const unreadCount = await countUnreadInGroup(req.userId, groupId);
+    emitToUser(req.userId, 'group:unread', { groupId, unreadCount });
+
+    res.json({
+      success: true,
+      message: 'Mensagens marcadas como lidas',
+      data: { groupId, unreadCount },
+    });
+  } catch (error: any) {
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    console.error('Mark group messages read error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao marcar mensagens como lidas',
+    });
+  }
+};
+
 export const joinGroup = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.userId) {
@@ -429,11 +530,15 @@ export const joinGroup = async (req: AuthRequest, res: Response) => {
 
     const group = await prisma.group.findUnique({
       where: { id: groupId },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, isPrivate: true, caseId: true },
     });
 
     if (!group || !group.isActive) {
       throw new AppError('Grupo não encontrado ou inativo', 404);
+    }
+
+    if (group.isPrivate) {
+      throw new AppError('Este grupo é privado e não aceita novos membros', 403);
     }
 
     const member = await prisma.groupMember.upsert({
@@ -450,6 +555,8 @@ export const joinGroup = async (req: AuthRequest, res: Response) => {
         role: 'MEMBER',
       },
     });
+
+    await notifyGroupMembersChanged(groupId);
 
     res.json({
       success: true,
@@ -488,6 +595,8 @@ export const leaveGroup = async (req: AuthRequest, res: Response) => {
         },
       },
     });
+
+    await notifyGroupMembersChanged(groupId);
 
     res.json({
       success: true,

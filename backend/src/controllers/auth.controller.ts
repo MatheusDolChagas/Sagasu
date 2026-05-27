@@ -13,7 +13,6 @@ import {
   devVerificationLinkIfAllowed,
 } from '../services/emailVerification.service';
 
-/** Resposta pública + senha no login; `select` tipado assim evita divergência IDE/cliente Prisma. */
 type UserLoginRow = {
   id: string;
   name: string;
@@ -57,7 +56,6 @@ const emailSchema = z
   .email('Email inválido')
   .transform((s) => s.toLowerCase());
 
-// Schema de validação para registro
 const registerSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
   email: emailSchema,
@@ -65,7 +63,6 @@ const registerSchema = z.object({
   password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
 });
 
-// Schema de validação para login
 const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, 'Senha é obrigatória'),
@@ -73,10 +70,8 @@ const loginSchema = z.object({
 
 export const register = async (req: Request, res: Response) => {
   try {
-    // Validar dados
     const validatedData = registerSchema.parse(req.body);
 
-    // Verificar se o email já existe
     const existingUser = await prisma.user.findUnique({
       where: { email: validatedData.email },
     });
@@ -85,11 +80,9 @@ export const register = async (req: Request, res: Response) => {
       throw new AppError('Email já cadastrado', 400);
     }
 
-    // Hash da senha
     const hashedPassword = await bcrypt.hash(validatedData.password, 10);
     const { token: verifyToken, expiresAt } = generateVerificationToken();
 
-    // Criar usuário (login liberado após clicar no link enviado por email)
     const user = await prisma.user.create({
       data: {
         name: validatedData.name,
@@ -152,10 +145,8 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    // Validar dados
     const validatedData = loginSchema.parse(req.body);
 
-    // Buscar usuário
     const user = (await prisma.user.findUnique({
       where: { email: validatedData.email },
       select: LOGIN_SELECT as Prisma.UserSelect,
@@ -165,12 +156,10 @@ export const login = async (req: Request, res: Response) => {
       throw new AppError('Email ou senha inválidos', 401);
     }
 
-    // Verificar se o usuário está ativo
     if (!user.isActive) {
       throw new AppError('Usuário inativo', 403);
     }
 
-    // Verificar senha
     const isPasswordValid = await bcrypt.compare(
       validatedData.password,
       user.password
@@ -187,7 +176,6 @@ export const login = async (req: Request, res: Response) => {
       );
     }
 
-    // Gerar token JWT
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key-here';
     const token = jwt.sign(
       { userId: user.id, role: user.role },
@@ -399,7 +387,6 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       throw new AppError('Usuário não autenticado', 401);
     }
 
-    // Schema de validação para atualização de perfil
     const updateProfileSchema = z.object({
       name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').optional(),
       email: emailSchema.optional(),
@@ -409,7 +396,6 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
 
     const validatedData = updateProfileSchema.parse(req.body);
 
-    // Verificar se o email já existe (se estiver sendo alterado)
     if (validatedData.email) {
       const existingUser = await prisma.user.findFirst({
         where: {
@@ -437,7 +423,6 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Atualizar usuário
     const updatedUser = await prisma.user.update({
       where: { id: req.userId },
       data: {

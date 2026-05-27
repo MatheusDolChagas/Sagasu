@@ -65,12 +65,15 @@
   text-underline-offset: 2px;
 }
 
-/* Escala de texto */
-html[data-font-scale='large'] {
+/* Escala de texto (base e acessibilidade) */
+html {
   font-size: 112.5%;
 }
+html[data-font-scale='large'] {
+  font-size: 127.5%;
+}
 html[data-font-scale='xlarge'] {
-  font-size: 125%;
+  font-size: 145%;
 }
 
 /* Respeitar SO + opção manual */

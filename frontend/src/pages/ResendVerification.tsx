@@ -72,7 +72,7 @@ export default function ResendVerification() {
               </p>
               {devLink ? (
                 <div className="rounded-xl border border-primary/40 bg-primary/10 p-3 text-left text-dark">
-                  <p className="font-semibold mb-1">Desenvolvimento (email não configurado):</p>
+                  <p className="font-semibold mb-1">Link de confirmação:</p>
                   <a href={devLink} className="break-all text-primary text-xs hover:underline">
                     {devLink}
                   </a>

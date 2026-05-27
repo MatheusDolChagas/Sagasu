@@ -9,6 +9,7 @@ import {
   updateGroup,
   getGroupById,
   createGroupComment,
+  markGroupMessagesRead,
 } from '../controllers/group.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
@@ -18,6 +19,7 @@ router.get('/my', authenticate, getMyGroups);
 router.get('/case/:caseId', authenticate, getGroupsByCase);
 router.get('/:id', authenticate, getGroupById);
 router.post('/:id/comments', authenticate, createGroupComment);
+router.post('/:id/read', authenticate, markGroupMessagesRead);
 router.post('/', authenticate, createGroup);
 router.post('/:groupId/join', authenticate, joinGroup);
 router.post('/:groupId/leave', authenticate, leaveGroup);

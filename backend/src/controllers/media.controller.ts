@@ -13,7 +13,6 @@ const bodySchema = z.object({
   context: z.enum(['general', 'avatar', 'case_primary']).optional().default('general'),
 });
 
-/** Pré-validação após upload (ex.: Supabase); requer usuário autenticado. */
 export const validateMedia = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.userId) {
@@ -67,7 +66,6 @@ const attachCaseMediaSchema = z.object({
   imageUrl: z.string().url('URL inválida'),
 });
 
-/** Dono do caso pode anexar fotos adicionais (roupas, objetos, etc.). */
 export const attachCaseMedia = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.userId) throw new AppError('Usuário não autenticado', 401);
@@ -124,7 +122,6 @@ const promoteSightingSchema = z.object({
   sightingId: z.string().uuid('ID do avistamento inválido'),
 });
 
-/** Dono do caso pode promover foto do avistamento para mídia pública do caso. */
 export const promoteSightingToCaseMedia = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.userId) throw new AppError('Usuário não autenticado', 401);
