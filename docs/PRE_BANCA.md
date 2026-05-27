@@ -1,148 +1,267 @@
-# Roteiro de apresentação — Pré-banca Sagasu (10 min)
+# Roteiro de apresentação — Sagasu (pré-banca / banca)
 
-**Dupla sugerida:** Pessoa A (contexto + produto) · Pessoa B (arquitetura + demo técnica)  
-**Tempo total:** ~10 minutos (+ 2–3 min reserva para perguntas rápidas no fim de cada bloco)
+**Tempo sugerido:** 10–12 minutos de fala + demo + 5–10 min de perguntas  
+**Dupla:** Os **dois** participam das **duas etapas** (produto/negócio **e** técnica), alternando falas e complementando um ao outro.
 
----
-
-## Pessoa A — Problema, solução e fluxo do usuário (~5 min)
-
-### 0:00–1:00 | Abertura
-- “Somos [nomes]. O **Sagasu** é uma plataforma web colaborativa para apoio à localização de **idosos desaparecidos**, com foco em pessoas com **60 anos ou mais** e, em muitos casos, com **comprometimento cognitivo**.”
-- Público-alvo: familiares, voluntários, ONGs e autoridades (polícia).
-
-### 1:00–2:30 | Problema e proposta de valor
-- Desaparecimento de idosos exige **divulgação rápida**, **organização de buscas** e **canal seguro para dicas**.
-- O Sagasu centraliza: cadastro do caso, mapa, dicas, voluntários, grupos de busca, avistamentos e notificações.
-- Diferencial: colaboração em tempo real + mapa + validação de conteúdo sensível (fotos).
-
-### 2:30–4:30 | Demonstração (fluxo principal)
-Mostrar na ordem:
-1. **Cadastro/login** com confirmação de e-mail.
-2. **Criar caso** (idade mínima 60, último local visto com sugestão de endereço, foto).
-3. **Detalhe do caso** — dicas, “quero ajudar”, feed.
-4. **Mapa** — casos, dicas e avistamentos; mapa de calor.
-5. **Grupo de busca** — comentários e chat (se tiverem dados de teste).
-
-### 4:30–5:00 | Encerramento do bloco A
-- “O sistema prioriza **privacidade** (coordenadas não expostas na UI pública onde aplicável), **papel de autoridade** (exportação de caso) e **acessibilidade** (controles de tema/tamanho).”
-- Passa a palavra para a Pessoa B.
+**Regra de ouro:** quem não está com o mouse na demo ainda fala 20–30 segundos (contexto de negócio **ou** detalhe técnico daquela tela). Nunca ficar em silêncio enquanto o colega opera o sistema.
 
 ---
 
-## Pessoa B — Arquitetura, stack e decisões técnicas (~5 min)
+## Roteiro cronometrado (~10 min) — os dois em tudo
 
-### 5:00–6:00 | Stack
-| Camada | Tecnologia |
-|--------|------------|
-| Frontend | React, TypeScript, Vite, Tailwind |
-| Backend | Node.js, Express, TypeScript |
-| Banco | PostgreSQL + Prisma ORM |
-| Auth | JWT + bcrypt |
-| Tempo real | Socket.io |
-| Arquivos | Supabase Storage |
-| E-mail | Resend (domínio `sagasu.com.br`) |
-| Validação de imagens | API OpenAI (moderação + visão) |
-| Geocodificação | Nominatim + Photon (proxy no backend) |
+### Etapa 1 — Problema, valor e demonstração (0:00–5:30)
 
-### 6:00–7:30 | Arquitetura
-- API REST em `/api/*` — controllers por domínio (`auth`, `cases`, `tips`, `groups`, `map`, `media`).
-- `middleware` de autenticação e autorização por **role** (`USER`, `POLICE`, `NGO`, `ADMIN`).
-- Prisma: modelos `User`, `Case`, `Tip`, `Volunteer`, `Group`, `Sighting`, `Notification`, etc.
-- Upload: front envia para Supabase → backend valida URL da imagem antes de persistir.
+| Tempo | Quem | Conteúdo |
+|-------|------|----------|
+| **0:00–0:30** | **A + B** | Abertura **juntos** (uma frase cada): apresentar nomes e uma linha sobre o Sagasu. |
+| **0:30–1:15** | **A** | Problema e público: idosos 60+, familiares, voluntários, ONGs, autoridades. Não substitui 190/192. |
+| **1:15–1:45** | **B** | Proposta de valor + gancho técnico leve: “centralizamos caso, mapa, dicas, chat e notificações em tempo real”. |
+| **1:45–4:45** | **A e B alternando** | Demo na tela — ver tabela abaixo (quem opera / quem narra). |
+| **4:45–5:30** | **B** | Um diferencial técnico rápido (Socket.io + validação de imagem). |
+| **5:30** | **A** | Ponte: “Agora mostramos **como isso foi construído** — também dividido entre nós dois.” |
 
-### 7:30–9:00 | Pontos que a banca costuma perguntar (antecipar na fala)
-- **Segurança:** senha com hash; JWT; rotas protegidas; validação com Zod.
-- **LGPD/privacidade:** dicas podem ser anônimas; exportação para autoridades restrita.
-- **Escalabilidade:** stateless na API; filas não implementadas (limitação conhecida).
-- **Limitações atuais:** dependência de serviços externos (OpenAI, Resend, OSM); domínio de e-mail precisa DNS verificado.
+#### Demo — quem opera e quem complementa
 
-### 9:00–10:00 | Fechamento
-- Próximos passos: app mobile, push notifications, integração formal com órgãos, testes automatizados.
-- “Estamos abertos às perguntas sobre código, banco e regras de negócio.”
+| # | Tela | Opera | Narra (negócio) | Complementa (técnico) |
+|---|------|-------|-----------------|------------------------|
+| 1 | Cadastro / login | A | E-mail confirmado antes de usar | B: JWT após login, token no cliente |
+| 2 | Criar caso | A | Idade 60+, endereço, foto | B: geocodificação no backend, OpenAI na foto |
+| 3 | Detalhe do caso | B | Feed, dica anônima, “Quero ajudar” | A: papel do responsável em aprovar |
+| 4 | Compartilhar | B | Redes sociais, legenda copiada | A: alcance para a comunidade |
+| 5 | Mapa | A | Visão da busca na cidade | B: marcadores + mapa de calor |
+| 6 | Avistamentos | B | Foto + local, só casos ativos | A: qualidade da informação para a família |
+| 7 | Grupos / contatos | A | Busca pública vs contato privado | B: `isPrivate`, contato ao aprovar voluntário |
+| 8 | Chat | B | Mensagens e não lidas | A: coordenação entre voluntários |
+| 9 | Meus casos | A | Criados + voluntariados | B: duas listas na API |
+| 10 | Encerrar caso | B | Encontrado / cancelado | A: grupos param, contato permanece |
+| 11 | Perfil / a11y | A | Foto de perfil, tema, fonte | B: preferências persistidas, toast no tema escuro |
 
----
-
-## Perguntas prováveis da banca (preparem respostas)
-
-### Sobre o projeto / negócio
-1. Por que foco só em 60+?  
-   *Resposta:* Alinhado ao escopo do TCC e ao perfil de risco de idosos com Alzheimer e similares.
-
-2. Como garantem que a informação é confiável?  
-   *Resposta:* Dono do caso modera voluntários; dicas têm status; autoridades podem exportar pacote do caso.
-
-3. O que acontece com dados sensíveis (foto, endereço)?  
-   *Resposta:* Armazenamento em storage com políticas; validação de imagem; mapa agrega/omite detalhes conforme regras da UI.
-
-4. Diferença entre dica, avistamento e voluntário?  
-   *Resposta:* Dica = informação textual; avistamento = registro com local/foto; voluntário = pessoa que se oferece para ajudar no caso.
-
-### Sobre código e arquitetura
-5. Por que separaram frontend e backend?  
-   *Resposta:* Deploy independente, API reutilizável, segurança (JWT só no client autenticado).
-
-6. Onde está a regra de “só dono edita o caso”?  
-   *Resposta:* `case.controller.ts` — checagem `userId` vs `req.userId`.
-
-7. Como funciona o tempo real?  
-   *Resposta:* Socket.io no `server.ts` / `socket.ts`; eventos emitidos em `realtime.service.ts` após criar dica/voluntário/avistamento.
-
-8. Por que Prisma e não SQL puro?  
-   *Resposta:* Tipagem, migrations versionadas, produtividade; SQL gerado pelo Prisma.
-
-9. Como validam imagens?  
-   *Resposta:* `mediaValidation.service.ts` — download da URL, moderação OpenAI, visão para foto de perfil/capa do caso.
-
-10. Por que geocodificação no backend?  
-    *Resposta:* Evitar CORS e respeitar política de uso do Nominatim; filtro `countrycodes=br`.
-
-### Sobre banco de dados
-11. Qual o relacionamento Case ↔ User?  
-    *Resposta:* `Case.userId` → dono; voluntários via tabela `Volunteer`.
-
-12. Como modelaram grupos públicos vs privados?  
-    *Resposta:* Campo `isPrivate` em `Group`; listagens filtram por permissão.
-
-13. E-mail verificado está onde?  
-    *Resposta:* `User.emailVerified`, token e expiração em colunas de verificação.
-
-### Sobre deploy e operação
-14. Como rodam localmente?  
-    *Resposta:* Docker PostgreSQL, `pnpm dev` no backend (porta 4445), frontend Vite (3000) com proxy `/api`.
-
-15. Variáveis de ambiente críticas?  
-    *Resposta:* `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `OPENAI_API_KEY`, Supabase no front.
-
-16. O que falta para produção?  
-    *Resposta:* HTTPS, secrets em vault, rate limit, logs, testes E2E, monitoramento, backup do banco.
-
-### Pegadinhas / críticas
-17. “Usaram IA no código?”  
-    *Resposta honesta:* Ferramentas de apoio podem ter sido usadas; **arquitetura, regras de negócio e integrações foram definidas pela equipe**; código revisado e testado manualmente.
-
-18. “E se a OpenAI cair?”  
-    *Resposta:* Cadastro de imagem pode falhar com mensagem clara; anexos gerais têm fluxo mais simples; fallback configurável.
-
-19. “Como promovem usuário a POLICE/ADMIN?”  
-    *Resposta:* Prisma Studio/SQL ou endpoint `POST /api/auth/users/promote-role` (ADMIN).
+**Frases prontas na demo (qualquer um pode usar):**
+- Negócio: “O responsável mantém controle sobre quem ajuda e quando o caso encerra.”
+- Técnico: “Isso dispara evento no Socket.io e grava notificação no PostgreSQL.”
 
 ---
 
-## Checklist antes da pré-banca
-- [ ] Banco com 2–3 casos de teste realistas (nomes, fotos, endereços em BH).
-- [ ] E-mail/domínio Resend verificado OU link de confirmação manual preparado.
-- [ ] Backend e frontend rodando; login testado.
-- [ ] Mapa com pelo menos um marcador.
-- [ ] Saber abrir `prisma/schema.prisma` e explicar 3 entidades principais.
-- [ ] Temporizador: ensaiar 1x cronometrado (8–9 min de fala + demo).
+### Etapa 2 — Arquitetura, stack e fechamento (5:30–10:00)
+
+| Tempo | Quem | Conteúdo |
+|-------|------|----------|
+| **5:30–6:15** | **B** | Stack (tabela abaixo) — 2–3 itens; **A** interrompe com 1 frase de **por que** essa escolha (ex.: “React pela produtividade da interface”). |
+| **6:15–7:00** | **A** | Modelo de dados em linguagem de negócio: Caso, Dica, Voluntário, Grupo, Avistamento — **B** mostra `schema.prisma` ou diagrama nos mesmos nomes. |
+| **7:00–7:45** | **B** | API REST + autenticação (JWT, roles POLICE/NGO/ADMIN). |
+| **7:45–8:30** | **A** | Regras que a banca costuma perguntar: LGPD, dica anônima, exportação para autoridades. |
+| **8:30–9:15** | **B** | Tempo real (salas `user`/`case`/`group`), notificações, `GroupReadReceipt`. |
+| **9:15–9:45** | **A** | Limitações honestas: redes sociais, dependência OpenAI/Resend, testes E2E futuros. |
+| **9:45–10:00** | **A + B** | Fechamento **juntos**: trabalhos futuros + “perguntem sobre regra de negócio **ou** implementação — os dois dominam o sistema.” |
+
+#### Stack (slide ou fala — B lidera, A comenta 1 linha por linha)
+
+| Camada | Tecnologia | Comentário de negócio (A) |
+|--------|------------|---------------------------|
+| Frontend | React, TypeScript, Vite, Tailwind, Leaflet | Interface acessível e mapa para busca |
+| Backend | Node.js, Express, Zod | Regras de permissão no servidor |
+| Banco | PostgreSQL + Prisma | Histórico do caso e auditoria |
+| Auth | JWT + e-mail verificado | Conta confiável |
+| Tempo real | Socket.io | Família vê dica na hora |
+| Arquivos | Supabase Storage | Fotos com URL validada |
+| E-mail | Resend / SMTP | Confirmação de cadastro |
+| Imagens | OpenAI moderação + visão | Conteúdo impróprio bloqueado |
+| Endereços | Nominatim via backend | Busca de rua no Brasil |
 
 ---
 
-## Divisão alternativa (se preferirem por camada)
+## Na hora das perguntas — os dois respondem tudo
 
-| Tempo | Pessoa A | Pessoa B |
-|-------|----------|----------|
-| 0–3 min | Problema + personas | Stack + diagrama |
-| 3–7 min | Demo UX (caso + mapa) | Demo código (auth + Prisma + socket) |
-| 7–10 min | Acessibilidade + materiais | Segurança + limitações + trabalhos futuros |
+Não dividir “só negócio” / “só código”. Combinação sugerida:
+
+| Tipo de pergunta | Quem inicia | Quem complementa |
+|------------------|-------------|------------------|
+| Problema, ética, LGPD | A | B com 1 frase técnica se couber |
+| Regra de negócio (voluntário, grupo, encerrar) | Quem lembrar da regra | O outro confirma com exemplo de tela |
+| Stack, banco, socket | B | A traduz para o usuário final |
+| “Mostrem no código” | B abre arquivo | A explica **o que** aquela regra protege |
+| Limitações / trabalhos futuros | Alternar frases | Ambos concordam com 1 ponto cada |
+
+**Se não souberem na hora:** “Boa pergunta — entre nós dois: [colega], você complementa?” (demonstra domínio conjunto do projeto).
+
+---
+
+## Funcionalidades implementadas (referência rápida)
+
+Use esta lista se a banca perguntar “o que está pronto?”:
+
+- [x] Cadastro com confirmação de e-mail e reenvio de link  
+- [x] Login JWT, perfil com foto (validada)  
+- [x] CRUD de casos (idade mínima, geocodificação, foto principal)  
+- [x] Dicas no caso (anônimas ou identificadas)  
+- [x] Voluntários (pendente / aprovado / rejeitado) + contato privado automático ao aprovar  
+- [x] Grupos de busca públicos + entrar em grupos disponíveis  
+- [x] Chat de grupo em tempo real + não lidas + marcar como lidas  
+- [x] Feed do caso e notificações no sino (tempo real)  
+- [x] Avistamentos com foto e mapa (lista só casos ativos)  
+- [x] Mapa com marcadores e mapa de calor  
+- [x] Compartilhamento social (WhatsApp, X, FB/LI com texto copiado, Instagram com prévia)  
+- [x] Finalizar caso (encontrado / cancelado)  
+- [x] Meus casos (criados + voluntariados)  
+- [x] Exportação para autoridades (dono / POLICE / NGO / ADMIN)  
+- [x] Materiais educativos, FAQ, contato (formulário + WhatsApp)  
+- [x] Acessibilidade: tema claro/escuro/sistema, 3 tamanhos de fonte, contraste alto, menos animação  
+- [x] Documentação admin (`/admin/docs`) e mensagens de contato (`/admin/contacts`)  
+
+---
+
+## Perguntas prováveis e como responder
+
+### Projeto, negócio e ética
+
+**1. Por que só idosos 60+?**  
+> O escopo do TCC e o perfil de risco (Alzheimer, confusão mental, vulnerabilidade). A plataforma pode evoluir, mas o foco atual é esse público.
+
+**2. O Sagasu substitui a polícia?**  
+> Não. É ferramenta de **divulgação e organização comunitária**. Em emergência, sempre 190/192. O export para autoridades **complementa** o trabalho oficial.
+
+**3. Como vocês garantem informação confiável?**  
+> O **responsável pelo caso** aprova voluntários; dicas podem ser anônimas mas ficam no histórico do caso; fotos passam por **moderação automática**; casos podem ser marcados como verificados (fluxo administrativo).
+
+**4. O que é dica, avistamento e voluntário?**  
+> **Dica:** texto/local sobre o caso. **Avistamento:** registro com **foto + coordenadas**. **Voluntário:** pessoa que pede para ajudar; se aprovada, ganha canal privado com o responsável.
+
+**5. Qual a diferença entre grupo de busca e contato salvo?**  
+> **Grupo de busca:** público no caso, vários voluntários coordenam ações; **inativa** quando o caso encerra. **Contato salvo:** privado, criado ao aprovar voluntário; **permanece** após o caso fechar para follow-up.
+
+**6. O que acontece quando o caso é encerrado?**  
+> Status `FOUND` ou `CLOSED`, com detalhes/motivo e data. Grupos de busca ficam **inativos**; contatos privados **continuam**; avistamentos de casos fechados saem da listagem pública.
+
+**7. E a LGPD / dados pessoais?**  
+> Dados para finalidade de busca; dica anônima sem identificar o autor; exportação restrita; usuário controla perfil; em produção: política de privacidade, retenção e DPO seriam formalizados.
+
+---
+
+### Demonstração e UX
+
+**8. Por que o Facebook só mostra o link?**  
+> Limitação da API do Facebook: não aceita mais texto pré-preenchido só por URL. Copiamos a **legenda completa** para o usuário colar (Ctrl+V).
+
+**9. Como funciona o Instagram?**  
+> Não há API para criar post externo. Abrimos um **modal** com prévia (foto do caso + legenda), opção de baixar imagem, copiar texto e abrir o app/site.
+
+**10. Por que pedir foto de perfil?**  
+> Confiança entre família e voluntários. Lembrete amigável em navegação; upload opcional mas incentivado.
+
+**11. Acessibilidade — o que implementaram?**  
+> Tema claro/escuro/sistema; **três escalas de fonte**; contraste alto; redução de movimento; skip link; componentes com foco visível.
+
+---
+
+### Arquitetura e código
+
+**12. Por que frontend e backend separados?**  
+> Deploy independente, API reutilizável (futuro app mobile), segurança (segredos e regras no servidor).
+
+**13. Onde está a regra “só o dono fecha o caso”?**  
+> `case.controller.ts` — `closeCase` verifica `case.userId === req.userId`.
+
+**14. Como funciona o tempo real?**  
+> Socket.io: cliente entra em salas `user:{id}`, `case:{id}`, `group:{id}`. Serviços emitem eventos após criar dica, voluntário, avistamento, mensagem de grupo. Frontend (`NotificationBell`, `CaseFeed`, `GroupDetail`) escuta e atualiza.
+
+**15. Como contam mensagens não lidas?**  
+> Tabela `GroupReadReceipt` (`lastReadAt` por usuário/grupo). Contagem de comentários posteriores; endpoint `POST /groups/:id/read`; evento `group:unread` via socket.
+
+**16. Por que Prisma?**  
+> Tipagem TypeScript, migrations versionadas, produtividade. SQL gerado e auditável.
+
+**17. Como validam imagens?**  
+> `mediaValidation.service.ts`: download da URL, moderação OpenAI, visão para avatar e foto principal do caso. Sem chave válida, rejeita conteúdo sensível.
+
+**18. Por que geocodificar no backend?**  
+> Evitar CORS, respeitar política do Nominatim, filtrar Brasil (`countrycodes=br`).
+
+**19. Dono do caso pode ver grupo sem ser membro?**  
+> Sim, em grupos privados de contato e para acompanhar o caso — `getGroupById` e socket permitem acesso ao **dono do caso** mesmo fora de `group_members`.
+
+---
+
+### Banco de dados
+
+**20. Relacionamentos principais?**  
+> `User` 1—N `Case`; `Case` 1—N `Tip`, `Volunteer`, `Group`, `Sighting`; `Group` 1—N `GroupMember`, `GroupComment`; `Volunteer` único por (userId, caseId).
+
+**21. Campos de encerramento do caso?**  
+> `closureDetails`, `cancellationReason`, `closedAt`, `status` (`FOUND` / `CLOSED` / etc.).
+
+**22. Notificações — tipos?**  
+> `TIP_RECEIVED`, `VOLUNTEER_JOINED`, `CASE_UPDATE`, `GROUP_MESSAGE`, `CASE_RESOLVED`, `SYSTEM`; opcional `groupId` para abrir o chat.
+
+---
+
+### Deploy, operação e limitações
+
+**23. Como rodar localmente?**  
+> Docker PostgreSQL → `prisma migrate` → backend `pnpm dev` (porta configurada no `.env`) → frontend Vite (3000) com proxy `/api` e `/socket.io`.
+
+**24. Variáveis críticas?**  
+> `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, e-mail (`RESEND_*` ou `SMTP_*`), `OPENAI_API_KEY`, Supabase no frontend (`VITE_SUPABASE_*`).
+
+**25. O que falta para produção?**  
+> HTTPS, secrets em cofre, rate limit, logs/monitoramento, testes E2E, backup, política de privacidade publicada, DNS e domínio de e-mail verificado.
+
+**26. E se a OpenAI cair?**  
+> Upload de avatar/foto principal falha com mensagem clara; não aceita bypass silencioso em produção (`MEDIA_AVATAR_RELAXED` só para dev explícito).
+
+**27. Como promovem POLICE/ADMIN?**  
+> Prisma Studio, SQL ou `POST /api/auth/users/promote-role` (requer ADMIN logado).
+
+---
+
+### Pegadinhas e honestidade acadêmica
+
+**28. Usaram IA para programar?**  
+> Ferramentas de apoio podem ter sido usadas; **requisitos, arquitetura, modelagem e integrações foram definidos pela equipe**; código revisado, testado manualmente e documentado.
+
+**29. Qual a maior limitação técnica hoje?**  
+> Dependência de serviços externos; ausência de testes automatizados amplos; compartilhamento social limitado pelas redes; notificações via web socket (não push nativo mobile).
+
+**30. Por que Socket.io e não só polling?**  
+> Menor latência para dicas, chat e sino de notificações; melhor experiência em busca colaborativa onde minutos importam.
+
+---
+
+## Respostas curtas (uma frase) — cola rápida
+
+| Pergunta | Resposta em 1 frase |
+|----------|---------------------|
+| Público-alvo? | Familiares, voluntários, ONGs e autoridades em buscas de idosos 60+. |
+| Anonimato? | Dicas podem ser anônimas; identidade do autor não é exibida ao público. |
+| Tempo real? | Socket.io para feed, chat, membros e notificações. |
+| Grupo vs contato? | Grupo = busca pública; contato = privado após aprovar voluntário. |
+| Caso fechado? | Grupos de busca desativam; contatos e histórico permanecem. |
+| Mapa? | Casos/dicas/avistamentos com coordenadas + mapa de calor. |
+| Segurança? | JWT, bcrypt, Zod, roles, validação de mídia. |
+| Produção? | Falta endurecer infra, testes e compliance formal LGPD. |
+
+---
+
+## Checklist antes da apresentação
+
+- [ ] Banco com 2–3 casos de teste (BH ou cidade conhecida), com foto e coordenadas  
+- [ ] Um caso **ativo** e um **encerrado** (para mostrar diferença em grupos e avistamentos)  
+- [ ] Dois usuários logados (responsável + voluntário) para demo de chat e notificação  
+- [ ] E-mail configurado OU roteiro para mostrar link de confirmação em dev  
+- [ ] Backend + frontend rodando; login testado  
+- [ ] Mapa com pelo menos um marcador  
+- [ ] Ensaiar demo em **8–9 min** (cronômetro)  
+- [ ] Saber abrir `prisma/schema.prisma` e explicar Case, Volunteer, Group em 1 min  
+- [ ] Tema escuro ligado se apresentar em projetor (contraste das badges do caso)  
+
+---
+
+## Ensaio recomendado (30 min)
+
+1. **Passagem 1:** A opera demo, B complementa técnico (15 min).  
+2. **Passagem 2:** B opera demo, A complementa negócio (15 min).  
+3. **Etapa 2:** cada um ensaia 2 min de stack + 2 min de arquitetura (os dois sabem o slide).  
+4. Simular 3 perguntas: cada um responde **uma** iniciando e **uma** só complementando o colega.
+
+---
+
+*Documento atualizado: roteiro com participação **paritária** em produto e técnica; funcionalidades alinhadas ao sistema atual (grupos, chat, encerramento, compartilhamento, meus casos, acessibilidade).*
