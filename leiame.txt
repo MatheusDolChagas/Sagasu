@@ -1,0 +1,175 @@
+SAGASU - LEIAME
+================
+
+Sistema web colaborativo para apoio a localizacao de idosos desaparecidos.
+
+Autores: Leonardo Vieira Martins e Matheus Henrique de Oliveira Chagas
+Faculdade Cotemig - Trabalho de Conclusao de Curso
+
+
+1. O QUE VOCE PRECISA TER INSTALADO
+------------------------------------
+
+- Node.js 18 ou superior
+- npm (vem com o Node)
+- Docker e Docker Compose (para o banco PostgreSQL)
+- Git (para clonar o repositorio)
+
+Servicos externos usados pelo sistema (criar conta gratuita ou de teste):
+
+- Supabase (armazenamento de fotos: casos, avatares, avistamentos)
+- Resend OU SMTP (envio do e-mail de confirmacao de cadastro)
+- OpenAI (validacao de imagens enviadas ao sistema)
+
+Sem OpenAI configurada, o cadastro de foto de perfil e foto principal do caso
+nao funciona. Sem e-mail configurado, o usuario precisa confirmar a conta
+manualmente no banco ou usar o link exibido em ambiente de desenvolvimento.
+
+
+2. BANCO DE DADOS
+-----------------
+
+Na pasta raiz do projeto:
+
+  docker-compose up -d
+
+Isso sobe o PostgreSQL na porta 5432, usuario postgres, senha postgres,
+banco sagasu.
+
+
+3. BACKEND (API)
+----------------
+
+Entrar na pasta backend e instalar dependencias:
+
+  cd backend
+  npm install
+
+Criar o arquivo .env (copiar do exemplo abaixo e ajustar):
+
+  DATABASE_URL="postgresql://postgres:postgres@localhost:5432/sagasu?schema=public"
+  JWT_SECRET="troque-por-uma-chave-segura"
+  JWT_EXPIRES_IN="7d"
+  PORT=4445
+  NODE_ENV=development
+  FRONTEND_URL=http://localhost:3000
+
+  RESEND_API_KEY=sua-chave-resend
+  EMAIL_FROM=Sagasu <noreply@seudominio.com.br>
+
+  OPENAI_API_KEY=sua-chave-openai
+
+Observacao: a porta 4445 e a que o frontend espera no proxy do Vite.
+Se mudar PORT, altere tambem frontend/vite.config.ts.
+
+Rodar migracoes e gerar o cliente Prisma:
+
+  npx prisma migrate deploy
+  npx prisma generate
+
+Subir a API:
+
+  npm run dev
+
+A API fica em http://localhost:4445
+
+
+4. FRONTEND
+-----------
+
+Em outro terminal:
+
+  cd frontend
+  npm install
+
+Criar frontend/.env com:
+
+  VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+  VITE_SUPABASE_ANON_KEY=sua-chave-anon
+
+Buckets no Supabase Storage (criar no painel e liberar leitura publica):
+
+  cases      - fotos dos casos
+  avatars    - fotos de perfil
+  sightings  - fotos de avistamentos
+
+Subir o frontend:
+
+  npm run dev
+
+Acesse http://localhost:3000
+
+O frontend encaminha /api e /socket.io para o backend automaticamente.
+
+
+5. PRIMEIRO ACESSO
+------------------
+
+1. Cadastre um usuario em /register
+2. Confirme o e-mail (link enviado ou, em dev, link na tela)
+3. Faca login
+4. Crie um caso em /cases/create
+
+Para dar perfil de policia, ONG ou administrador a um usuario:
+
+  cd backend
+  npx prisma studio
+
+Na tabela users, altere o campo role para POLICE, NGO ou ADMIN.
+
+
+6. E-MAIL (CONFIRMACAO DE CADASTRO)
+-----------------------------------
+
+Opcao A - Resend (resend.com):
+
+  RESEND_API_KEY=re_xxxx
+  EMAIL_FROM=Sagasu <onboarding@resend.dev>
+
+Opcao B - SMTP (exemplo Gmail com senha de app):
+
+  SMTP_HOST=smtp.gmail.com
+  SMTP_PORT=587
+  SMTP_SECURE=false
+  SMTP_USER=seu@gmail.com
+  SMTP_PASS=senha-de-app
+  EMAIL_FROM=Sagasu <seu@gmail.com>
+
+FRONTEND_URL deve apontar para onde o usuario abre o site (ex.: http://localhost:3000).
+
+
+7. ORDEM PARA SUBIR TUDO
+------------------------
+
+1. docker-compose up -d
+2. backend: migrate + generate + npm run dev
+3. frontend: npm run dev
+4. Abrir http://localhost:3000 no navegador
+
+
+8. PROBLEMAS COMUNS
+-------------------
+
+- "Erro ao conectar no banco": verifique se o Docker esta rodando (docker-compose ps).
+
+- prisma generate com erro EPERM no Windows: pare o backend (Ctrl+C) e rode de novo.
+
+- Fotos nao enviam: confira VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no frontend/.env
+  e se os buckets existem no Supabase.
+
+- Foto rejeitada no cadastro: OPENAI_API_KEY invalida ou ausente no backend/.env.
+
+- Notificacoes em tempo real nao chegam: backend precisa estar rodando; faca login
+  para o socket autenticar com o token JWT.
+
+- Porta em uso: altere PORT no backend e o target do proxy em frontend/vite.config.ts.
+
+
+9. ESTRUTURA DO PROJETO
+-----------------------
+
+backend/   - API Node.js + Express + Prisma + Socket.io
+frontend/  - Interface React + Vite
+docker-compose.yml - PostgreSQL local
+
+Documentacao da API (com servidor rodando): http://localhost:4445/api-docs
